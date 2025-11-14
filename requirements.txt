@@ -1,10 +1,10 @@
-
 fastapi
 uvicorn[standard]
 sqlalchemy
 mysql-connector-python
 python-dotenv
-passlib[bcrypt]
+passlib     # CAMBIADO
+bcrypt      # AÑADIDO
 pyjwt
 jinja2
 python-multipart

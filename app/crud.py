@@ -1,11 +1,12 @@
-
 from .db import SessionLocal
 from . import models
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, date
 import os
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# CAMBIO: Cambia "bcrypt" por "sha256_crypt".
+# Esto evita usar la biblioteca bcrypt que está rota.
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 def get_user_by_username(db, username):
     return db.query(models.User).filter(models.User.username==username).first()
@@ -16,12 +17,14 @@ def authenticate_user(username, password):
     db.close()
     if not user:
         return None
+    # Esta función (verify) funcionará automáticamente con el nuevo algoritmo
     if not pwd_context.verify(password, user.password_hash):
         return None
     return user
 
 def create_user(username, password, role="employee", full_name=None, email=None, area=None):
     db = SessionLocal()
+    # Esta función (hash) ahora usará sha256_crypt
     hashed = pwd_context.hash(password)
     u = models.User(username=username, password_hash=hashed, role=role, full_name=full_name, email=email, area=area)
     db.add(u)

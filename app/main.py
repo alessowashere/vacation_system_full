@@ -4,7 +4,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
-# CAMBIO 1: Importar lo que necesitamos de crud y db
 from app import crud, models, schemas
 from app.db import SessionLocal, engine, Base
 from app.auth import get_current_user, create_access_token
@@ -12,8 +11,8 @@ from datetime import timedelta
 
 Base.metadata.create_all(bind=engine)
 
-# CAMBIO 2: Lógica para crear el usuario admin si no existe
-# Esto es lo que faltaba en el proyecto.
+# CAMBIO: Vuelve a activar la creación del admin.
+# Ahora que las dependencias están arregladas, esto funcionará.
 def create_default_admin():
     print("--- CHEQUEANDO USUARIO ADMIN POR DEFECTO ---")
     db = SessionLocal()
@@ -27,11 +26,11 @@ def create_default_admin():
     db.close()
 
 create_default_admin()
-# FIN DEL CAMBIO 2
+# FIN DEL CAMBIO
 
 templates = Jinja2Templates(directory="app/templates")
 
-app = FastAPI(root_path="/gestion")
+app = FastAPI(root_path=":49262/gestion")
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY","secret"))
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
