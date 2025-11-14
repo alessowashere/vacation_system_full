@@ -1,10 +1,9 @@
-
 <!doctype html>
 <html>
 <head><title>New Vacation</title></head>
 <body>
 <h1>New Vacation</h1>
-<form action="/vacations" method="post" enctype="multipart/form-data">
+<form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data">
   <label>Start date: <input type="date" name="start_date" required></label><br/>
   <label>Type (30/15/7/8): <input type="number" name="period_type" value="30" required></label><br/>
   <label>Attach doc (optional): <input type="file" name="file"></label><br/>

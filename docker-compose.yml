@@ -2,6 +2,7 @@ services:
   app:
     build: .
     container_name: vacation_app
+    restart: always
     ports:
       - "8000:8000"
     environment:
@@ -9,7 +10,7 @@ services:
       - DB_PORT=3306
       - DB_USER=admin
       - DB_PASSWORD=Redlabel@
-      - DB_NAME=vacations_db
+      - DB_NAME=vacation_system  # <-- CAMBIADO
     depends_on:
       - vacation_db
 
@@ -21,7 +22,7 @@ services:
       - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: Redlabel@
-      MYSQL_DATABASE: vacations_db
+      MYSQL_DATABASE: vacation_system  # <-- CAMBIADO
       MYSQL_USER: admin
       MYSQL_PASSWORD: Redlabel@
     command: --default-authentication-plugin=mysql_native_password

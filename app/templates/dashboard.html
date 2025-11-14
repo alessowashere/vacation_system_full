@@ -1,10 +1,9 @@
-
 <!doctype html>
 <html>
 <head><title>Dashboard</title></head>
 <body>
 <h1>Dashboard - {{ user.username }} ({{ user.role }})</h1>
-<p><a href="/vacations/new">New vacation</a> | <a href="/logout">Logout</a></p>
+<p><a href="{{ url_for('vacation_new_form') }}">New vacation</a> | <a href="{{ url_for('logout') }}">Logout</a></p>
 <h2>Your vacations</h2>
 <ul>
 {% for v in data.vacations %}
