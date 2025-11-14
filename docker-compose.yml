@@ -12,9 +12,12 @@ services:
       - DB_PASSWORD=Redlabel@
       - DB_NAME=vacation_system
     depends_on:
-      # CAMBIO: Ahora espera a que la BD esté saludable
       vacation_db:
         condition: service_healthy
+    
+    # --- AÑADE ESTA LÍNEA ---
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # --- FIN DE LA MODIFICACIÓN ---
 
   vacation_db:
     image: mysql:8.0
@@ -30,7 +33,6 @@ services:
     command: --default-authentication-plugin=mysql_native_password
     volumes:
       - vacation_mysql_data:/var/lib/mysql
-    # AÑADIDO: Esta sección comprueba si MySQL está listo
     healthcheck:
       test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "admin", "-pRedlabel@"]
       interval: 5s

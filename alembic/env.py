@@ -1,3 +1,11 @@
+# --- AÑADIR ESTAS LÍNEAS AL INICIO ---
+import sys
+import os
+# Añade el directorio raíz del proyecto (un nivel arriba de 'alembic') al sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# --- FIN DE LAS LÍNEAS A AÑADIR ---
+
+
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -12,7 +20,11 @@ from app.models import User, Holiday, VacationPeriod # Importar todos los modelo
 config = context.config
 
 # 2. Establecer la URL de la base de datos desde nuestro app/db.py
-config.set_main_option('sqlalchemy.url', DATABASE_URL)
+# --- MODIFICACIÓN ---
+# Escapa los caracteres '%' (p.ej. en la contraseña) duplicándolos a '%%'
+# para que el configparser de Alembic no falle.
+alembic_db_url = DATABASE_URL.replace('%', '%%')
+config.set_main_option('sqlalchemy.url', alembic_db_url)
 
 # 3. Apuntar a los metadatos de nuestros modelos
 target_metadata = Base.metadata
@@ -20,7 +32,8 @@ target_metadata = Base.metadata
 
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    #fileConfig(config.config_file_name)
+    pass
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
