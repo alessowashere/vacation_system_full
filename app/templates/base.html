@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>{% block title %}Sistema de Vacaciones{% endblock %}</title>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+  <div class="container mx-auto max-w-4xl mt-10 p-4">
+    <main class="bg-white shadow-md rounded-lg p-6">
+      
+      {% block content %}
+      {% endblock %}
+
+    </main>
+  </div>
+
+</body>
+</html>

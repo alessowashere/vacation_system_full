@@ -9,7 +9,6 @@ from app.db import SessionLocal, engine, Base
 from app.auth import get_current_user, create_access_token
 from datetime import timedelta
 
-Base.metadata.create_all(bind=engine)
 
 # CAMBIO: Vuelve a activar la creación del admin.
 # Ahora que las dependencias están arregladas, esto funcionará.

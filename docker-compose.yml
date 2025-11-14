@@ -10,9 +10,11 @@ services:
       - DB_PORT=3306
       - DB_USER=admin
       - DB_PASSWORD=Redlabel@
-      - DB_NAME=vacation_system  # <-- CAMBIADO
+      - DB_NAME=vacation_system
     depends_on:
-      - vacation_db
+      # CAMBIO: Ahora espera a que la BD esté saludable
+      vacation_db:
+        condition: service_healthy
 
   vacation_db:
     image: mysql:8.0
@@ -22,12 +24,18 @@ services:
       - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: Redlabel@
-      MYSQL_DATABASE: vacation_system  # <-- CAMBIADO
+      MYSQL_DATABASE: vacation_system
       MYSQL_USER: admin
       MYSQL_PASSWORD: Redlabel@
     command: --default-authentication-plugin=mysql_native_password
     volumes:
       - vacation_mysql_data:/var/lib/mysql
+    # AÑADIDO: Esta sección comprueba si MySQL está listo
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "admin", "-pRedlabel@"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
   vacation_mysql_data:

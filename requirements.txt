@@ -3,10 +3,11 @@ uvicorn[standard]
 sqlalchemy
 mysql-connector-python
 python-dotenv
-passlib     # CAMBIO: Quita [bcrypt] y también quita la línea 'bcrypt'
+passlib
 pyjwt
 jinja2
 python-multipart
 aiofiles
 email-validator
 itsdangerous
+alembic  # <-- AÑADIR ESTA LÍNEA
