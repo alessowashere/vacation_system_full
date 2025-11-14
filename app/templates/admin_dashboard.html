@@ -1,68 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Panel de Admin{% endblock %}
 
 {% block content %}
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">
-      Dashboard <span class="text-gray-500 font-normal">- {{ user.username }} ({{ user.role }})</span>
+      Panel de Administración
     </h1>
-    <div>
-      {% if user.role == 'admin' %}
-        <a href="{{ url_for('admin_dashboard') }}" class="inline-block bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-sm transition duration-300">
-          Admin Panel
-        </a>
-      {% endif %}
-      <a href="{{ url_for('vacation_new_form') }}" class="inline-block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm transition duration-300">
-        Nueva Solicitud
-      </a>
-      <a href="{{ url_for('logout') }}" class="inline-block text-gray-500 hover:text-red-600 font-medium py-2 px-4 rounded text-sm transition duration-300">
-        Salir
-      </a>
-    </div>
+    <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Dashboard</a>
   </div>
 
-  {% if error_msg %}
-  <div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
-    <span class="font-medium">{{ error_msg }}</span>
-  </div>
-  {% endif %}
-  <h2 class="text-xl font-semibold mb-4">Tus Solicitudes de Vacaciones</h2>
-  
-  <div class="overflow-x-auto shadow-md rounded-lg">
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
-        <tr>
-          {% if user.role == 'admin' or user.role == 'hr' or user.role == 'manager' %}
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
-          {% endif %}
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Inicio</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Fin</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white divide-y divide-gray-200">
-        {% for v in data.vacations %}
-        <tr>
-          {% if user.role == 'admin' or user.role == 'hr' or user.role == 'manager' %}
-          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
-          {% endif %}
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.end_date }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.days }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-              {{ v.status }}
-            </span>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes de vacaciones.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <a href="{{ url_for('admin_feriados') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
+        Gestionar Feriados
+      </h5>
+      <p class="font-normal text-gray-700">
+        Añadir, editar o eliminar los feriados nacionales y específicos.
+      </p>
+    </a>
+    
+    <a href="{{ url_for('admin_ajustes') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
+        Ajustes del Sistema
+      </h5>
+      <p class="font-normal text-gray-700">
+        Configurar las reglas de negocio (cálculo de fechas, extensiones, etc.).
+      </p>
+    </a>
+    <div class="block p-6 bg-gray-50 border border-gray-200 rounded-lg shadow">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-400">
+        Gestión de Usuarios (Próximamente)
+      </h5>
+      <p class="font-normal text-gray-500">
+        Crear o modificar usuarios y sus roles.
+      </p>
+    </div>
+
   </div>
 {% endblock %}

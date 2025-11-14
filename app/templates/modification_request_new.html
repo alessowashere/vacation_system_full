@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Modificación{% endblock %}
+
+{% block content %}
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">
+      Solicitar Modificación de Vacaciones
+    </h1>
+    <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Dashboard</a>
+  </div>
+
+  <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md">
+    <p class="font-bold">Solicitud Rechazada</p>
+    <p>Estás solicitando una modificación para el periodo <strong>{{ vacation.start_date }}</strong> al <strong>{{ vacation.end_date }}</strong> del usuario <strong>{{ vacation.user.username }}</strong>.</p>
+    <p>Por favor, adjunta un nuevo documento y la razón de la solicitud.</p>
+  </div>
+
+  <form action="{{ url_for('action_request_modification', vacation_id=vacation.id) }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto bg-white shadow-md rounded-lg p-8">
+    
+    <div class="mb-4">
+      <label for="reason_text" class="block text-sm font-medium text-gray-700">Motivo o Justificación:</label>
+      <textarea name="reason_text" id="reason_text" rows="4" required 
+             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+    </div>
+
+    <div class="mb-6">
+      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento de Sustento (Obligatorio):</label>
+      <input type="file" name="file" id="file" required
+             class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+    </div>
+    
+    <button type="submit" 
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+      Enviar Solicitud de Modificación
+    </button>
+  </form>
+{% endblock %}

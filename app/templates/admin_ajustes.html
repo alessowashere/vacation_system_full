@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Ajustes del Sistema{% endblock %}
+
+{% block content %}
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">
+      Ajustes del Sistema
+    </h1>
+    <a href="{{ url_for('admin_dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Panel</a>
+  </div>
+
+  <form action="{{ url_for('admin_update_settings') }}" method="post" class="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
+    <h2 class="text-lg font-semibold mb-6 text-gray-700">Reglas de Cálculo de Vacaciones</h2>
+
+    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
+      <div>
+        <label for="HOLIDAYS_COUNT" class="text-sm font-medium text-gray-900">¿Los feriados cuentan contra el balance?</label>
+        <p class="text-xs text-gray-500">
+          (Recomendado: Sí). Si es "Sí", un feriado consume un día de vacaciones.<br/>
+          Si es "No", los feriados se saltan y no consumen días de balance.
+        </p>
+      </div>
+      <select name="HOLIDAYS_COUNT" id="HOLIDAYS_COUNT" class="rounded-md border-gray-300">
+        <option value="True" {% if settings.HOLIDAYS_COUNT == "True" %}selected{% endif %}>Sí, cuentan</option>
+        <option value="False" {% if settings.HOLIDAYS_COUNT == "False" %}selected{% endif %}>No, no cuentan</option>
+      </select>
+    </div>
+
+    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
+      <div>
+        <label for="FRIDAY_EXTENDS" class="text-sm font-medium text-gray-900">¿Extender si el periodo termina en viernes?</label>
+        <p class="text-xs text-gray-500">
+          Si es "Sí", un periodo que termina un viernes se extenderá automáticamente para incluir Sábado y Domingo.
+        </p>
+      </div>
+      <select name="FRIDAY_EXTENDS" id="FRIDAY_EXTENDS" class="rounded-md border-gray-300">
+        <option value="True" {% if settings.FRIDAY_EXTENDS == "True" %}selected{% endif %}>Sí, extender</option>
+        <option value="False" {% if settings.FRIDAY_EXTENDS == "False" %}selected{% endif %}>No, no extender</option>
+      </select>
+    </div>
+
+    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
+      <div>
+        <label for="ALLOW_START_ON_HOLIDAY" class="text-sm font-medium text-gray-900">¿Permitir iniciar vacaciones en un feriado?</label>
+        <p class="text-xs text-gray-500">
+          (Recomendado: No). Bloquea que los usuarios elijan un feriado como fecha de inicio.
+        </p>
+      </div>
+      <select name="ALLOW_START_ON_HOLIDAY" id="ALLOW_START_ON_HOLIDAY" class="rounded-md border-gray-300">
+        <option value="True" {% if settings.ALLOW_START_ON_HOLIDAY == "True" %}selected{% endif %}>Sí, permitir</option>
+        <option value="False" {% if settings.ALLOW_START_ON_HOLIDAY == "False" %}selected{% endif %}>No, bloquear</option>
+      </select>
+    </div>
+
+    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
+      <div>
+        <label for="ALLOW_START_ON_WEEKEND" class="text-sm font-medium text-gray-900">¿Permitir iniciar vacaciones en fin de semana?</label>
+        <p class="text-xs text-gray-500">
+          (Recomendado: No). Bloquea que los usuarios elijan Sábado o Domingo como fecha de inicio.
+        </p>
+      </div>
+      <select name="ALLOW_START_ON_WEEKEND" id="ALLOW_START_ON_WEEKEND" class="rounded-md border-gray-300">
+        <option value="True" {% if settings.ALLOW_START_ON_WEEKEND == "True" %}selected{% endif %}>Sí, permitir</option>
+        <option value="False" {% if settings.ALLOW_START_ON_WEEKEND == "False" %}selected{% endif %}>No, bloquear</option>
+      </select>
+    </div>
+
+    <button type="submit" 
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+      Guardar Ajustes
+    </button>
+  </form>
+{% endblock %}

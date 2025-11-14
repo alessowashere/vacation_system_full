@@ -1,21 +1,21 @@
 # app/main.py
+# (VERSIÓN PARTE 6)
 
 import os
-from fastapi import FastAPI, Request, Depends, Form, UploadFile, File
+from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
 from app import crud, models, schemas
 from app.db import SessionLocal, engine, Base
-from app.auth import get_current_user, create_access_token
-from datetime import timedelta, datetime # Importar datetime
+from app.auth import get_current_user, create_access_token, get_current_manager_user
+from datetime import timedelta, datetime
 
-# --- IMPORTA EL ROUTER DE ADMIN (DE PARTE 1) ---
+# --- IMPORTA LOS ROUTERS ---
 from app.routers import admin as admin_router
+from app.routers import actions as actions_router
 
-# CAMBIO: Vuelve a activar la creación del admin.
-# Ahora que las dependencias están arregladas, esto funcionará.
 def create_default_admin():
     print("--- CHEQUEANDO USUARIO ADMIN POR DEFECTO ---")
     db = SessionLocal()
@@ -28,143 +28,177 @@ def create_default_admin():
         print("--- USUARIO ADMIN YA EXISTE ---")
     db.close()
 
-# --- NUEVA FUNCIÓN (PARTE 2) ---
 def create_test_users():
-    """
-    Crea usuarios de prueba para 'hr', 'boss' (manager) y 'employee'.
-    """
     print("--- CHEQUEANDO USUARIOS DE PRUEBA ---")
     db = SessionLocal()
     
-    # Usuario HR
     if not crud.get_user_by_username(db, "hr_user"):
         crud.create_user("hr_user", "Redlabel@", role="hr", full_name="RRHH User")
         print("--- CREADO USUARIO hr_user ---")
 
-    # Usuario Boss (Manager)
     if not crud.get_user_by_username(db, "jefe_sist"):
         crud.create_user("jefe_sist", "Redlabel@", role="manager", full_name="Jefe de Sistemas", area="Sistemas")
         print("--- CREADO USUARIO jefe_sist (manager) ---")
         
-    # Usuario Employee
     if not crud.get_user_by_username(db, "emp_sist"):
         crud.create_user("emp_sist", "Redlabel@", role="employee", full_name="Empleado de Sistemas", area="Sistemas")
         print("--- CREADO USUARIO emp_sist (employee) ---")
         
     db.close()
-# --- FIN DE NUEVA FUNCIÓN ---
 
-# --- FUNCIÓN DE INICIO MODIFICADA (PARTE 2) ---
 def seed_initial_data():
     db = SessionLocal()
     create_default_admin()
     crud.seed_holidays(db) # De Parte 1
     create_test_users()    # De Parte 2
+    crud.seed_settings(db) # De Parte 3
     db.close()
 
-# Ejecuta ambas funciones de precarga
+# Ejecuta todas las funciones de precarga
 seed_initial_data()
-# FIN DEL CAMBIO
 
 templates = Jinja2Templates(directory="app/templates")
 
 app = FastAPI(root_path="/gestion")
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY","secret"))
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+uploads_dir = "uploads"
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 
 @app.get("/", response_class=HTMLResponse, name="home")
 def home(request: Request):
     tmpl = templates.get_template("home.html")
     return tmpl.render({"request": request})
 
-# AUTH routes (simple forms)
+# AUTH routes
 @app.get("/login", response_class=HTMLResponse, name="login_page")
 def login_page(request: Request):
     tmpl = templates.get_template("login.html")
     return tmpl.render({"request": request})
 
 @app.post("/login", name="login_submit")
-def login(username: str = Form(...), password: str = Form(...)):
+def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = crud.authenticate_user(username, password)
     if not user:
-        return RedirectResponse("/gestion/login?error=1", status_code=302) # Corregido con prefijo
+        error_url = request.url_for('login_page') + "?error=1"
+        return RedirectResponse(url=error_url, status_code=302)
+        
     token = create_access_token({"sub": user.username})
-    response = RedirectResponse(url="/gestion/app", status_code=302) # Corregido con prefijo
+    response = RedirectResponse(url=request.url_for('dashboard'), status_code=302)
     response.set_cookie("access_token", token, httponly=True)
     return response
 
 @app.get("/logout", name="logout")
-def logout():
-    response = RedirectResponse("/gestion/", status_code=302) # Corregido con prefijo
+def logout(request: Request):
+    response = RedirectResponse(url=request.url_for('home'), status_code=302)
     response.delete_cookie("access_token")
     return response
 
-# --- RUTA DASHBOARD MODIFICADA (PARTE 2) ---
+# RUTA DASHBOARD
 @app.get("/app", response_class=HTMLResponse, name="dashboard")
 def dashboard(request: Request, current=Depends(get_current_user)):
     user = current
     tmpl = templates.get_template("dashboard.html")
-    data = crud.get_dashboard_data(user)
+    db = SessionLocal()
+    data = crud.get_dashboard_data(db, user) # 'data' ahora es un dict con listas
+    db.close()
     
-    # --- AÑADIR ESTO PARA MOSTRAR ERROR DE BALANCE ---
-    # Revisa si la URL tiene un parámetro 'error'
     error_msg = None
-    if request.query_params.get("error") == "balance":
+    error_type = request.query_params.get("error")
+    if error_type == "balance":
         error_msg = "Error: No tienes suficientes días de balance para esta solicitud."
+    elif error_type == "start_date":
+        error_msg = "Error: La fecha de inicio no es válida (es fin de semana o feriado)."
+    elif error_type == "general":
+        error_msg = "Error: Ocurrió un problema al crear la solicitud."
     
     return tmpl.render({
         "request": request, 
         "user": user, 
-        "data": data,
-        "error_msg": error_msg # <-- Pasa el mensaje de error a la plantilla
+"data": data,
+        "error_msg": error_msg 
     })
-# --- FIN DE MODIFICACIÓN ---
 
-# --- RUTA vacation_new_form MODIFICADA (PARTE 2) ---
+# Rutas de Creación de Vacaciones
 @app.get("/vacations/new", response_class=HTMLResponse, name="vacation_new_form")
 def new_vacation_form(request: Request, current=Depends(get_current_user)):
-    # --- OBTENER EL BALANCE ---
     db = SessionLocal()
     remaining_balance = crud.get_user_vacation_balance(db, current)
     db.close()
-    # --- FIN DE OBTENER BALANCE ---
     
     tmpl = templates.get_template("vacation_new.html")
     return tmpl.render({
         "request": request, 
         "user": current,
-        "remaining_balance": remaining_balance # <-- Pasa el balance a la plantilla
+        "remaining_balance": remaining_balance 
     })
-# --- FIN DE MODIFICACIÓN ---
 
-# --- RUTA vacation_create MODIFICADA (PARTE 2) ---
 @app.post("/vacations", name="vacation_create")
 async def create_vacation(request: Request, start_date: str = Form(...), period_type: int = Form(...), file: UploadFile = File(None), current=Depends(get_current_user)):
-    # save file if provided
-    file_path = None
-    if file and file.filename: # Asegurarse que file.filename no esté vacío
+    
+    file_path_in_db = None
+    if file and file.filename: 
         uploads_dir = "uploads"
-        os.makedirs(uploads_dir, exist_ok=True)
-        file_path = os.path.join(uploads_dir, f"{current.username}_{file.filename}")
-        with open(file_path, "wb") as f:
+        file_path_in_db = f"{current.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+        file_disk_path = os.path.join(uploads_dir, file_path_in_db)
+        
+        with open(file_disk_path, "wb") as f:
             f.write(await file.read())
             
-    # --- LÓGICA DE CREACIÓN MODIFICADA ---
-    vp = crud.create_vacation(current, start_date, period_type, file_path)
+    try:
+        vp = crud.create_vacation(current, start_date, period_type, file_path_in_db)
+        return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
     
-    if vp is None:
-        # La creación falló (falta de balance)
-        # Redirigir al dashboard con un mensaje de error
-        return RedirectResponse("/gestion/app?error=balance", status_code=302) # Corregido con prefijo
-    
-    # Todo salió bien
-    return RedirectResponse("/gestion/app", status_code=302) # Corregido con prefijo
-    # --- FIN DE MODIFICACIÓN ---
+    except Exception as e:
+        error_str = str(e)
+        error_type = "general"
+        if "balance" in error_str:
+            error_type = "balance"
+        elif "Invalid start date" in error_str:
+            error_type = "start_date"
+            
+        error_url = request.url_for('dashboard') + f"?error={error_type}"
+        return RedirectResponse(url=error_url, status_code=302)
 
-# simple API endpoints
+# --- NUEVA RUTA (PARTE 6) ---
+@app.get("/vacation/{vacation_id}/modify", response_class=HTMLResponse, name="vacation_modify_form")
+def modify_vacation_form(
+    request: Request,
+    vacation_id: int,
+    current=Depends(get_current_manager_user) # Solo managers
+):
+    """
+    Muestra el formulario para solicitar la modificación de una solicitud rechazada.
+    """
+    db = SessionLocal()
+    vacation = crud.get_vacation_by_id(db, vacation_id)
+    db.close()
+
+    # Validar
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if vacation.user.area != current.area:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if vacation.status != 'rejected':
+        # Solo se pueden modificar las rechazadas
+        return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
+
+    tmpl = templates.get_template("modification_request_new.html")
+    return tmpl.render({
+        "request": request, 
+        "user": current,
+        "vacation": vacation
+    })
+# --- FIN DE NUEVA RUTA ---
+
+# ---- INCLUIR ROUTERS ----
 from app.api import api_router
 app.include_router(api_router, prefix="/api")
 
-# --- AÑADE EL ROUTER DE ADMIN (DE PARTE 1) ---
 app.include_router(admin_router.router)
+app.include_router(actions_router.router)

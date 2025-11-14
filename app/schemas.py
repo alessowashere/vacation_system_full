@@ -1,3 +1,5 @@
+# app/schemas.py
+# (VERSIÓN CORREGIDA PARTE 3)
 
 from pydantic import BaseModel
 from datetime import date
@@ -5,8 +7,8 @@ from typing import Optional
 
 class UserBase(BaseModel):
     username: str
-    full_name: Optional[str]
-    email: Optional[str]
+    full_name: Optional[str] = None # Corregido
+    email: Optional[str] = None # Corregido
     role: Optional[str] = "employee"
 
 class UserCreate(UserBase):
@@ -15,13 +17,8 @@ class UserCreate(UserBase):
 class VacationCreate(BaseModel):
     start_date: date
     type_period: int
-# --- Añadir estas clases al final de app/schemas.py ---
 
-from pydantic import BaseModel
-from datetime import date
-from typing import Optional
-
-# ... (clases UserBase, UserCreate, VacationCreate existentes) ...
+# --- ESQUEMAS DE FERIADOS (DE PARTE 1) ---
 
 class HolidayBase(BaseModel):
     holiday_date: date
@@ -35,4 +32,4 @@ class Holiday(HolidayBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True # <-- CORREGIDO DE 'orm_mode'
