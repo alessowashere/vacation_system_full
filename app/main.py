@@ -30,7 +30,7 @@ create_default_admin()
 
 templates = Jinja2Templates(directory="app/templates")
 
-app = FastAPI(root_path=":49262/gestion")
+app = FastAPI(root_path="/gestion")
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY","secret"))
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

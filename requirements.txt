@@ -3,8 +3,7 @@ uvicorn[standard]
 sqlalchemy
 mysql-connector-python
 python-dotenv
-passlib     # CAMBIADO
-bcrypt      # AÑADIDO
+passlib     # CAMBIO: Quita [bcrypt] y también quita la línea 'bcrypt'
 pyjwt
 jinja2
 python-multipart

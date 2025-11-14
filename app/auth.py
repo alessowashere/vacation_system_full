@@ -1,8 +1,9 @@
-
 import os
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer
 import jwt
+# CAMBIO 1: Importar datetime y timedelta
+from datetime import datetime, timedelta
 from .crud import get_user_by_username
 from app.db import SessionLocal
 
@@ -12,8 +13,11 @@ security = HTTPBearer()
 
 def create_access_token(data: dict, expires_delta: int = 60*60*24):
     to_encode = data.copy()
-    # naive token with expiry in seconds
-    to_encode.update({"exp": expires_delta})
+    
+    # CAMBIO 2: Calcular la fecha de expiración correcta
+    expire = datetime.utcnow() + timedelta(seconds=expires_delta)
+    to_encode.update({"exp": expire})
+    
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
