@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    container_name: vacation_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=vacation_db
+      - DB_PORT=3306
+      - DB_USER=admin
+      - DB_PASSWORD=Redlabel@
+      - DB_NAME=vacations_db
+    depends_on:
+      - vacation_db
+
+  vacation_db:
+    image: mysql:8.0
+    container_name: vacation_db
+    restart: always
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: Redlabel@
+      MYSQL_DATABASE: vacations_db
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Redlabel@
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - vacation_mysql_data:/var/lib/mysql
+
+volumes:
+  vacation_mysql_data:

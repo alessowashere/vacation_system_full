@@ -1,0 +1,15 @@
+
+<!doctype html>
+<html>
+<head><title>Dashboard</title></head>
+<body>
+<h1>Dashboard - {{ user.username }} ({{ user.role }})</h1>
+<p><a href="/vacations/new">New vacation</a> | <a href="/logout">Logout</a></p>
+<h2>Your vacations</h2>
+<ul>
+{% for v in data.vacations %}
+    <li>{{ v.user.username }}: {{ v.start_date }} → {{ v.end_date }} ({{ v.days }} days) [{{ v.status }}]</li>
+{% endfor %}
+</ul>
+</body>
+</html>
