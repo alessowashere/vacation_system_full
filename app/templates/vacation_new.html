@@ -3,7 +3,13 @@
 {% block title %}Nueva Solicitud{% endblock %}
 
 {% block content %}
-  <h1 class="text-2xl font-bold mb-6 text-center">Nueva Solicitud de Vacaciones</h1>
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">Nueva Solicitud de Vacaciones</h1>
+    <div class="text-right">
+      <span class="text-sm text-gray-500">Tu Balance Restante:</span>
+      <span class="text-lg font-bold text-green-600">{{ remaining_balance }} días</span>
+    </div>
+    </div>
   
   <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto">
     

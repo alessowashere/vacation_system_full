@@ -22,13 +22,18 @@
     </div>
   </div>
 
+  {% if error_msg %}
+  <div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
+    <span class="font-medium">{{ error_msg }}</span>
+  </div>
+  {% endif %}
   <h2 class="text-xl font-semibold mb-4">Tus Solicitudes de Vacaciones</h2>
   
   <div class="overflow-x-auto shadow-md rounded-lg">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          {% if user.role == 'admin' or user.role == 'hr' %}
+          {% if user.role == 'admin' or user.role == 'hr' or user.role == 'manager' %}
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
           {% endif %}
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Inicio</th>
@@ -40,7 +45,7 @@
       <tbody class="bg-white divide-y divide-gray-200">
         {% for v in data.vacations %}
         <tr>
-          {% if user.role == 'admin' or user.role == 'hr' %}
+          {% if user.role == 'admin' or user.role == 'hr' or user.role == 'manager' %}
           <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
           {% endif %}
           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }}</td>
