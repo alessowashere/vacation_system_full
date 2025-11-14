@@ -15,9 +15,12 @@ services:
       vacation_db:
         condition: service_healthy
     
-    # --- AÑADE ESTA LÍNEA ---
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # --- AÑADE ESTAS DOS LÍNEAS ---
+    volumes:
+      - .:/app
     # --- FIN DE LA MODIFICACIÓN ---
+    
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   vacation_db:
     image: mysql:8.0
