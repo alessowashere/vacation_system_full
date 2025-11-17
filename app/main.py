@@ -265,6 +265,9 @@ async def edit_vacation_submit(
         return RedirectResponse(url=error_url, status_code=302)
 
 # Ruta de Detalles (de Parte 9)
+# (Importar models al inicio de app/main.py si no está)
+# from app import crud, models, schemas 
+
 @app.get("/vacation/{vacation_id}/details", response_class=HTMLResponse, name="vacation_details")
 def vacation_details(
     request: Request,
@@ -273,28 +276,39 @@ def vacation_details(
     db: Session = Depends(get_db)
 ):
     vacation = crud.get_vacation_by_id(db, vacation_id)
-    
+
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    
+
     can_view = False
     if current.role in ['admin', 'hr']: can_view = True
     elif current.role == 'manager' and current.area == vacation.user.area: can_view = True
     elif current.id == vacation.user_id: can_view = True
-        
+
     if not can_view:
         raise HTTPException(status_code=403, detail="No autorizado")
 
     logs = crud.get_logs_for_vacation(db, vacation_id=vacation_id)
+
+    # --- LÍNEAS NUEVAS ---
+    # Buscar archivos de modificación y suspensión asociados
+    mod_requests = db.query(models.ModificationRequest).filter(
+        models.ModificationRequest.vacation_period_id == vacation_id
+    ).all()
+    sus_requests = db.query(models.SuspensionRequest).filter(
+        models.SuspensionRequest.vacation_period_id == vacation_id
+    ).all()
+    # --- FIN DE LÍNEAS NUEVAS ---
 
     tmpl = templates.get_template("vacation_details.html")
     return tmpl.render({
         "request": request, 
         "user": current,
         "vacation": vacation,
-        "logs": logs
+        "logs": logs,
+        "mod_requests": mod_requests, # <-- NUEVO
+        "sus_requests": sus_requests  # <-- NUEVO
     })
-
 # --- NUEVA RUTA (PARTE 10) ---
 @app.get("/vacation/{vacation_id}/suspend", response_class=HTMLResponse, name="vacation_suspend_form")
 def suspend_vacation_form(
