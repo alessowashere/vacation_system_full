@@ -28,14 +28,13 @@
         Configurar las reglas de negocio (cálculo de fechas, extensiones, etc.).
       </p>
     </a>
-    <div class="block p-6 bg-gray-50 border border-gray-200 rounded-lg shadow">
-      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-400">
-        Gestión de Usuarios (Próximamente)
+    <a href="{{ url_for('admin_user_list') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
+        Gestión de Usuarios
       </h5>
-      <p class="font-normal text-gray-500">
-        Crear o modificar usuarios y sus roles.
+      <p class="font-normal text-gray-700">
+        Crear, editar y restablecer contraseñas de usuarios.
       </p>
+    </a>
     </div>
-
-  </div>
 {% endblock %}

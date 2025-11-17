@@ -3,6 +3,15 @@
 {% block title %}Detalles de la Solicitud{% endblock %}
 
 {% block content %}
+{% set status_map = {
+    "draft": "Borrador",
+    "pending_hr": "Pendiente RRHH",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "pending_modification": "Pend. Modificación",
+    "pending_suspension": "Pend. Suspensión",
+    "suspended": "Suspendido"
+} %}
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">
       Detalles de la Solicitud
@@ -42,7 +51,7 @@
                      {% elif vacation.status == 'suspended' %} bg-gray-500 text-white
                      {% elif vacation.status == 'pending_suspension' %} bg-red-100 text-red-800
                      {% else %} bg-yellow-100 text-yellow-800 {% endif %}">
-          {{ vacation.status }}
+          {{ status_map.get(vacation.status, vacation.status) }}
         </span>
       </div>
       <div>
@@ -71,6 +80,14 @@
       <li>
         <a href="{{ url_for('uploads', path=vacation.consolidated_doc_path) }}" target="_blank" class="hover:underline">
           Documento Consolidado (Jefe)
+        </a>
+      </li>
+    {% endif %}
+    
+    {% if vacation.manager_individual_doc_path %}
+      <li>
+        <a href="{{ url_for('uploads', path=vacation.manager_individual_doc_path) }}" target="_blank" class="hover:underline">
+          Sustento Individual (Jefe)
         </a>
       </li>
     {% endif %}

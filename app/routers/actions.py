@@ -56,9 +56,10 @@ async def submit_area_to_hr(
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 @router.post("/vacation/{vacation_id}/submit_individual", name="action_submit_individual")
-def submit_individual_vacation(
+async def submit_individual_vacation(
     request: Request,
     vacation_id: int,
+    file: UploadFile = File(...), # <-- AHORA ESPERA UN ARCHIVO
     current=Depends(get_current_manager_user),
     db: Session = Depends(get_db)
 ):
@@ -66,14 +67,21 @@ def submit_individual_vacation(
     if not vacation or vacation.user.area != current.area:
         raise HTTPException(status_code=403, detail="No autorizado")
 
-    if not vacation.attached_file:
-        error_url = str(request.url_for('dashboard')) + f"?error=general&msg=No se puede enviar, el empleado no adjuntó documento."
+    # Validar si el archivo viene (aunque el form es 'required', doble check)
+    if not file or not file.filename:
+        error_url = str(request.url_for('dashboard')) + f"?error=general&msg=No se puede enviar sin adjuntar un documento."
         return RedirectResponse(url=error_url, status_code=302)
-    
+
+    # Guardar el archivo del jefe
+    uploads_dir = "uploads"
+    file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+    file_disk_path = os.path.join(uploads_dir, file_name)
+
+    with open(file_disk_path, "wb") as f:
+        f.write(await file.read())
+
     if vacation.status == 'draft':
-        crud.submit_individual_to_hr(db, vacation=vacation, actor=current)
-    
-    return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
+        crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name) # <-- Pasamos el
 
 
 @router.post("/vacation/{vacation_id}/approve", name="action_approve_vacation")

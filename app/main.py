@@ -17,13 +17,15 @@ from datetime import timedelta, datetime
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 
+# app/main.py
+
 def create_default_admin():
     print("--- CHEQUEANDO USUARIO ADMIN POR DEFECTO ---")
     db = SessionLocal()
     default_admin = crud.get_user_by_username(db, "admin")
     if not default_admin:
-        print("--- CREANDO USUARIO ADMIN POR DEFECTO (admin/Redlabel@) ---")
-        crud.create_user("admin", "Redlabel@", role="admin")
+        print("--- CREANDO USUARIO ADMIN POR DEFECTO (admin/Temporal123!) ---")
+        crud.create_user("admin", "Temporal123!", role="admin") # <-- CONTRASEÑA CAMBIADA
         print("--- USUARIO ADMIN CREADO ---")
     else:
         print("--- USUARIO ADMIN YA EXISTE ---")
@@ -34,15 +36,15 @@ def create_test_users():
     db = SessionLocal()
     
     if not crud.get_user_by_username(db, "hr_user"):
-        crud.create_user("hr_user", "Redlabel@", role="hr", full_name="RRHH User")
+        crud.create_user("hr_user", "Temporal123!", role="hr", full_name="RRHH User") # <-- CONTRASEÑA CAMBIADA
         print("--- CREADO USUARIO hr_user ---")
 
     if not crud.get_user_by_username(db, "jefe_sist"):
-        crud.create_user("jefe_sist", "Redlabel@", role="manager", full_name="Jefe de Sistemas", area="Sistemas")
+        crud.create_user("jefe_sist", "Temporal123!", role="manager", full_name="Jefe de Sistemas", area="Sistemas") # <-- CONTRASEÑA CAMBIADA
         print("--- CREADO USUARIO jefe_sist (manager) ---")
         
     if not crud.get_user_by_username(db, "emp_sist"):
-        crud.create_user("emp_sist", "Redlabel@", role="employee", full_name="Empleado de Sistemas", area="Sistemas")
+        crud.create_user("emp_sist", "Temporal123!", role="employee", full_name="Empleado de Sistemas", area="Sistemas") # <-- CONTRASEÑA CAMBIADA
         print("--- CREADO USUARIO emp_sist (employee) ---")
         
     db.close()
@@ -98,6 +100,57 @@ def logout(request: Request):
     response = RedirectResponse(url=request.url_for('home'), status_code=302)
     response.delete_cookie("access_token")
     return response
+
+# --- AÑADIR ESTAS RUTAS (FASE 4.2) ---
+
+@app.get("/change-password", response_class=HTMLResponse, name="change_password_form")
+def change_password_form(request: Request, current=Depends(get_current_user)):
+    """
+    Muestra el formulario de cambio de contraseña obligatorio.
+    'get_current_user' (modificado) permitirá el acceso a esta página.
+    """
+    error_msg = request.query_params.get("error_msg")
+    
+    tmpl = templates.get_template("force_change_password.html")
+    return tmpl.render({
+        "request": request,
+        "user": current,
+        "error_msg": error_msg
+    })
+
+@app.post("/change-password", name="change_password_submit")
+def change_password_submit(
+    request: Request, 
+    current=Depends(get_current_user), 
+    db: Session = Depends(get_db),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...)
+):
+    """
+    Procesa el formulario de cambio de contraseña.
+    """
+    error_url = request.url_for('change_password_form')
+
+    if new_password != confirm_password:
+        error_url += "?error_msg=Las contraseñas no coinciden."
+        return RedirectResponse(url=error_url, status_code=302)
+
+    try:
+        crud.change_user_password(db=db, user=current, new_password=new_password)
+    except ValueError as e:
+        error_url += f"?error_msg={str(e)}"
+        return RedirectResponse(url=error_url, status_code=302)
+    except Exception as e:
+        error_url += f"?error_msg=Error inesperado: {str(e)}"
+        return RedirectResponse(url=error_url, status_code=302)
+    
+    # Éxito, redirigir al dashboard (ahora la dependencia get_current_user lo permitirá)
+    return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
+
+# --- FIN DE NUEVAS RUTAS ---
+
+# RUTA DASHBOARD
+@app.get("/app", response_class=HTMLResponse, name="dashboard")
 
 # RUTA DASHBOARD
 @app.get("/app", response_class=HTMLResponse, name="dashboard")
@@ -195,7 +248,28 @@ def modify_vacation_form(
         "user": current,
         "vacation": vacation
     })
+@app.get("/vacation/{vacation_id}/submit-individual", response_class=HTMLResponse, name="vacation_submit_individual_form")
+def submit_individual_form(
+    request: Request,
+    vacation_id: int,
+    current=Depends(get_current_manager_user),
+    db: Session = Depends(get_db)
+):
+    vacation = crud.get_vacation_by_id(db, vacation_id)
 
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if vacation.user.area != current.area:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if vacation.status != 'draft':
+        return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
+
+    tmpl = templates.get_template("submission_individual_new.html")
+    return tmpl.render({
+        "request": request, 
+        "user": current,
+        "vacation": vacation
+    })
 # Rutas de Edición (de Parte 8)
 @app.get("/vacation/{vacation_id}/edit", response_class=HTMLResponse, name="vacation_edit_form")
 def edit_vacation_form(

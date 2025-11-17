@@ -83,36 +83,16 @@ class VacationCalculator:
         
         # 1. Validación de la fecha de inicio
         if not self.validate_start_date(start_date):
-            raise ValueError("Invalid start date based on business rules.")
+            raise ValueError("La fecha de inicio no es válida (es fin de semana o feriado).")
 
-        # 2. Configuración de cálculo
-        # ¿Los feriados cuentan contra el balance?
-        count_holidays = self.settings["HOLIDAYS_COUNT"]
+        # --- MODIFICACIÓN FASE 1: LÓGICA DE DÍAS CALENDARIO ---
+        # La lógica de negocio ahora es DÍAS CALENDARIO.
+        # Simplemente se suma el periodo solicitado (menos 1) a la fecha de inicio.
         
-        current_date = start_date
-        days_counted = 0
-        
-        # 3. Conteo de días
-        # El bucle avanza día por día hasta consumir los 'period_type' días.
-        while days_counted < period_type:
-            
-            # Si el día actual NO es fin de semana Y NO es un feriado (o los feriados cuentan)
-            if not self.is_non_working_day(current_date, count_holidays):
-                days_counted += 1
-            
-            # Si aún no hemos terminado, avanzamos al siguiente día
-            if days_counted < period_type:
-                current_date += timedelta(days=1)
-
-        # 4. Ajuste de fin de semana (Regla "Viernes extiende")
-        end_date = current_date
-        if self.settings["FRIDAY_EXTENDS"] and end_date.weekday() == 4: # Es viernes
-            end_date += timedelta(days=2) # Extiende a domingo
-            
-        # 5. Cálculo de días consumidos
-        # Los días consumidos del balance son siempre el tipo de periodo (7, 8, 15, 30)
-        # La regla de "extender viernes" no consume más días de balance (según diseño).
+        end_date = start_date + timedelta(days=period_type - 1)
         days_consumed = period_type
+        
+        # --- FIN DE LA MODIFICACIÓN ---
 
         return {
             "start_date": start_date,

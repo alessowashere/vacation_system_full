@@ -1,6 +1,6 @@
 # app/crud.py
 # (VERSIÓN PARTE 10)
-
+import re # <-- AÑADIR ESTA LÍNEA
 from .db import SessionLocal, get_db
 from . import models
 from passlib.context import CryptContext
@@ -11,9 +11,31 @@ from sqlalchemy import func
 from typing import List, Dict, Any
 
 from app.logic.vacation_calculator import VacationCalculator
+from passlib.context import CryptContext
+from datetime import datetime, timedelta, date # <-- ASEGÚRATE QUE 'date' ESTÉ IMPORTADO
+import os
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, and_ # <-- AÑADIR 'and_'
+from typing import List, Dict, Any
 
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
-
+def validate_password(password: str):
+    """
+    Valida la contraseña contra la política:
+    - 8+ caracteres
+    - 1+ mayúscula
+    - 1+ número
+    - 1+ carácter especial
+    """
+    if len(password) < 8:
+        raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("La contraseña debe contener al menos una mayúscula.")
+    if not re.search(r"[0-9]", password):
+        raise ValueError("La contraseña debe contener al menos un número.")
+    if not re.search(r"[\W_]", password): # \W es "no-alfanumérico"
+        raise ValueError("La contraseña debe contener al menos un carácter especial (ej. !@#$).")
+# --- FIN DE LA FUNCIÓN ---
 def get_user_by_username(db, username):
     return db.query(models.User).filter(models.User.username==username).first()
 
@@ -27,16 +49,33 @@ def authenticate_user(username, password):
         return None
     return user
 
-def create_user(username, password, role="employee", full_name=None, email=None, area=None):
+def create_user(username, password, role="employee", full_name=None, email=None, area=None, vacation_days_total=30, manager_id=None):
+    
+    # --- MODIFICACIÓN FASE 5.1 ---
+    # Ahora la validación SÍ lanza un error,
+    validate_password(password)
+    # --- FIN DE LA MODIFICACIÓN ---
+
     db = SessionLocal()
     hashed = pwd_context.hash(password)
-    u = models.User(username=username, password_hash=hashed, role=role, full_name=full_name, email=email, area=area)
+    # El 'force_password_change' se quedará en True por defecto
+    u = models.User(
+        username=username, 
+        password_hash=hashed, 
+        role=role, 
+        full_name=full_name, 
+        email=email, 
+        area=area,
+        vacation_days_total=vacation_days_total, # <-- NUEVO
+        manager_id=manager_id # <-- NUEVO
+    )
     db.add(u)
     db.commit()
     db.refresh(u)
     db.close()
     return u
 
+# --- MODIFICAR get_user_vacation_balance (FASE 5.3) ---
 def get_user_vacation_balance(db: Session, user: models.User):
     total_days_used = db.query(func.sum(models.VacationPeriod.days)).filter(
         models.VacationPeriod.user_id == user.id,
@@ -46,7 +85,9 @@ def get_user_vacation_balance(db: Session, user: models.User):
     if total_days_used is None:
         total_days_used = 0
         
-    return 30 - total_days_used
+    # Usar el total del usuario en lugar de 30
+    return user.vacation_days_total - total_days_used
+# --- FIN DE MODIFICACIÓN ---
 
 def create_vacation_log(db: Session, vacation: models.VacationPeriod, user: models.User, log_text: str):
     log = models.VacationLog(
@@ -103,8 +144,10 @@ def create_vacation(
         raise Exception(f"Error inesperado: {str(e)}")
 
 # --- get_dashboard_data MODIFICADA (PARTE 10) ---
+# --- get_dashboard_data MODIFICADA (FASE 3) ---
 def get_dashboard_data(db: Session, user: models.User):
     data = {}
+    today = date.today()
     
     if user.role == "admin" or user.role == "hr":
         data["draft_vacations"] = db.query(models.VacationPeriod).options(
@@ -120,29 +163,82 @@ def get_dashboard_data(db: Session, user: models.User):
             joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)
         ).filter(models.ModificationRequest.status == 'pending_review').all()
         
-        # ¡NUEVA LISTA!
         data["pending_suspensions"] = db.query(models.SuspensionRequest).options(
             joinedload(models.SuspensionRequest.requesting_user),
             joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)
         ).filter(models.SuspensionRequest.status == 'pending_review').all()
 
-        data["finalized_vacations"] = db.query(models.VacationPeriod).filter(
-            models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended']) # Añadido 'suspended'
+        data["finalized_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(
+            models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])
         ).all()
         
+        # --- NUEVO (FASE 3.2) ---
+        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(
+            models.VacationPeriod.status == 'approved',
+            models.VacationPeriod.start_date > today
+        ).order_by(models.VacationPeriod.start_date).all()
+        
     elif user.role == "manager":
-        data["area_vacations"] = db.query(models.VacationPeriod).options(
+        # --- MODIFICADO (FASE 3.1): Replicar lógica de HR filtrada por área ---
+        
+        data["draft_vacations"] = db.query(models.VacationPeriod).options(
             joinedload(models.VacationPeriod.user)
         ).join(models.User).filter(
-            models.User.area == user.area
+            models.User.area == user.area,
+            models.VacationPeriod.status == 'draft'
+        ).all()
+        
+        data["pending_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.area == user.area,
+            models.VacationPeriod.status == 'pending_hr'
+        ).all()
+        
+        data["pending_modifications"] = db.query(models.ModificationRequest).options(
+            joinedload(models.ModificationRequest.requesting_user),
+            joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).join(models.VacationPeriod).join(models.User).filter(
+            models.User.area == user.area,
+            models.ModificationRequest.status == 'pending_review'
+        ).all()
+        
+        data["pending_suspensions"] = db.query(models.SuspensionRequest).options(
+            joinedload(models.SuspensionRequest.requesting_user),
+            joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).join(models.VacationPeriod).join(models.User).filter(
+            models.User.area == user.area,
+            models.SuspensionRequest.status == 'pending_review'
+        ).all()
+
+        data["finalized_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.area == user.area,
+            models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])
+        ).all()
+        
+        # --- NUEVO (FASE 3.2) ---
+        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.area == user.area,
+            models.VacationPeriod.status == 'approved',
+            models.VacationPeriod.start_date > today
         ).order_by(models.VacationPeriod.start_date).all()
         
     else:
+        # Lógica de Empleado (sin cambios)
         data["my_vacations"] = db.query(models.VacationPeriod).filter(
             models.VacationPeriod.user_id == user.id
         ).order_by(models.VacationPeriod.start_date).all()
         
     return data
+# --- FIN DE MODIFICACIÓN ---
 # --- FIN DE MODIFICACIÓN ---
 
 def get_vacation_by_id(db: Session, vacation_id: int):
@@ -225,11 +321,12 @@ def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User
     
     db.commit()
 
-def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor: models.User):
+def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor: models.User, file_name: str):
     if vacation.status == 'draft':
         vacation.status = "pending_hr"
+        vacation.manager_individual_doc_path = file_name # <-- AÑADIDO
         db.commit()
-        create_vacation_log(db, vacation, actor, f"Enviado individualmente a RRHH.")
+        create_vacation_log(db, vacation, actor, f"Enviado individualmente a RRHH (con sustento).")
 
 def delete_vacation_period(db: Session, vacation_id: int):
     db_vacation = get_vacation_by_id(db, vacation_id)
@@ -485,3 +582,83 @@ def reject_suspension(db: Session, sus_id: int, actor: models.User):
     
     db.commit()
     return sus_req
+def change_user_password(db: Session, user: models.User, new_password: str):
+    """
+    Cambia la contraseña de un usuario, valida la política,
+    y marca 'force_password_change' como False.
+    """
+    # 1. Validar la nueva contraseña
+    validate_password(new_password) # Esto lanzará ValueError si falla
+
+    # 2. (Opcional) No permitir que sea la misma contraseña
+    if pwd_context.verify(new_password, user.password_hash):
+        raise ValueError("La nueva contraseña no puede ser la misma que la anterior.")
+        
+    # 3. Hashear y guardar
+    user.password_hash = pwd_context.hash(new_password)
+    user.force_password_change = False
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
+# ... (después de change_user_password)
+
+# --- AÑADIR NUEVAS FUNCIONES (FASE 5) ---
+
+def get_user_by_id(db: Session, user_id: int):
+    """Obtiene un usuario por su ID."""
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+def get_all_users(db: Session):
+    """Obtiene todos los usuarios, con sus managers cargados."""
+    return db.query(models.User).options(
+        joinedload(models.User.manager)
+    ).order_by(models.User.username).all()
+
+def get_all_managers(db: Session):
+    """Obtiene todos los usuarios que son 'manager' o 'admin' o 'hr'."""
+    return db.query(models.User).filter(
+        models.User.role.in_(['manager', 'admin', 'hr'])
+    ).order_by(models.User.username).all()
+
+def admin_update_user(
+    db: Session, 
+    user: models.User, 
+    username: str, 
+    full_name: str, 
+    email: str, 
+    role: str, 
+    area: str, 
+    vacation_days_total: int, 
+    manager_id: int
+):
+    """Actualiza los detalles de un usuario desde el panel de admin."""
+    user.username = username
+    user.full_name = full_name
+    user.email = email
+    user.role = role
+    user.area = area
+    user.vacation_days_total = vacation_days_total
+    user.manager_id = manager_id if manager_id else None
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
+def admin_reset_password(db: Session, user: models.User):
+    """
+    Restablece la contraseña de un usuario a 'Temporal123!'
+    y fuerza el cambio en el próximo login.
+    """
+    # Esta contraseña SÍ cumple la política de la Fase 4
+    default_password = "Temporal123!" 
+    
+    user.password_hash = pwd_context.hash(default_password)
+    user.force_password_change = True
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
+# --- FIN DE NUEVAS FUNCIONES ---

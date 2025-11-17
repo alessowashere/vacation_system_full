@@ -2,7 +2,7 @@
 # (VERSIÓN PARTE 10)
 
 from sqlalchemy import Column, Integer, String, Date, ForeignKey, Boolean, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref # <-- AÑADIR backref
 from datetime import datetime
 from .db import Base
 
@@ -15,6 +15,15 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="employee")
     area = Column(String(120), nullable=True)
+    force_password_change = Column(Boolean, default=True)
+
+    # --- AÑADIR ESTAS LÍNEAS (FASE 5) ---
+    vacation_days_total = Column(Integer, default=30)
+    
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    manager = relationship("User", remote_side=[id], backref="subordinates")
+    # --- FIN DE LÍNEAS A AÑADIR ---
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Holiday(Base):
@@ -38,6 +47,7 @@ class VacationPeriod(Base):
     user = relationship("User")
 
     consolidated_doc_path = Column(String(255), nullable=True)
+    manager_individual_doc_path = Column(String(255), nullable=True)
 
 class SystemConfig(Base):
     __tablename__ = "system_config"

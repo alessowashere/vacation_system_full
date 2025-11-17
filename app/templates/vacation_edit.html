@@ -3,6 +3,15 @@
 {% block title %}Editar Solicitud{% endblock %}
 
 {% block content %}
+{% set status_map = {
+    "draft": "Borrador",
+    "pending_hr": "Pendiente RRHH",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "pending_modification": "Pend. Modificación",
+    "pending_suspension": "Pend. Suspensión",
+    "suspended": "Suspendido"
+} %}
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Editar Solicitud de Vacaciones</h1>
     <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Dashboard</a>
@@ -10,7 +19,7 @@
 
   <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md">
     <p>Estás editando la solicitud de <strong>{{ vacation.user.username }}</strong> 
-       (Estado actual: <span class="font-bold">{{ vacation.status }}</span>).
+       (Estado actual: <span class="font-bold">{{ status_map.get(vacation.status, vacation.status) }}</span>).
     </p>
     <p>Solo puedes editar la fecha de inicio y el tipo de periodo.</p>
   </div>
