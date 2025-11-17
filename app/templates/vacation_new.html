@@ -23,7 +23,8 @@
       <label for="period_type" class="block text-sm font-medium text-gray-700">Tipo de Periodo (días):</label>
       <select name="period_type" id="period_type" required
               class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-        <option value="">Seleccione un periodo...</option> <option value="30">30 días</option>
+        <option value="">Seleccione un periodo...</option>
+        <option value="30">30 días</option>
         <option value="15">15 días</option>
         <option value="8">8 días</option>
         <option value="7">7 días</option>
@@ -40,8 +41,8 @@
     </div>
     
     <div class="mb-6">
-      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento (Opcional):</label>
-      <input type="file" name="file" id="file"
+      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento (Obligatorio):</label>
+      <input type="file" name="file" id="file" required
              class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
     </div>
     
@@ -51,24 +52,18 @@
     </button>
   </form>
 
-
   <script>
-    // 1. Obtener los elementos del DOM
     const startDateInput = document.getElementById('start_date');
     const periodTypeInput = document.getElementById('period_type');
-    
     const resultWrapper = document.getElementById('calc_result_wrapper');
     const endDateDisplay = document.getElementById('calc_end_date');
-    
     const warningWrapper = document.getElementById('calc_warning_wrapper');
     const warningText = document.getElementById('calc_warning_text');
 
-    // 2. Función para llamar a la API
     async function updateCalculations() {
       const startDate = startDateInput.value;
       const periodType = periodTypeInput.value;
 
-      // Solo ejecutar si ambos campos tienen valor
       if (!startDate || !periodType) {
         resultWrapper.classList.add('hidden');
         warningWrapper.classList.add('hidden');
@@ -76,61 +71,42 @@
       }
 
       try {
-        // Esta es la URL de tu API.
-        // /gestion (root_path) + /api (api_router) + /calculate-end-date (calculator_router)
         const response = await fetch('/gestion/api/calculate-end-date', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             start_date: startDate,
             period_type: parseInt(periodType)
           })
         });
 
-        if (!response.ok) {
-          throw new Error('Error en la conexión con el servidor.');
-        }
-
+        if (!response.ok) throw new Error('Error en la conexión.');
         const data = await response.json();
 
         if (data.success) {
-          // Éxito: Mostrar Fecha de Fin
           endDateDisplay.textContent = data.end_date;
           resultWrapper.classList.remove('hidden');
-
-          // Mostrar advertencia si existe (ej. extensión de viernes)
           if (data.warning) {
             warningText.textContent = data.warning;
             warningWrapper.classList.remove('hidden');
-            warningWrapper.classList.remove('bg-red-100', 'border-red-500', 'text-red-700');
-            warningWrapper.classList.add('bg-blue-100', 'border-blue-500', 'text-blue-700');
+            warningWrapper.className = 'mb-4 p-4 rounded-lg bg-blue-100 border-blue-500 text-blue-700';
           } else {
             warningWrapper.classList.add('hidden');
           }
-
         } else {
-          // Error de lógica (ej. "fecha de inicio en feriado")
           warningText.textContent = data.error;
           warningWrapper.classList.remove('hidden');
-          warningWrapper.classList.remove('bg-blue-100', 'border-blue-500', 'text-blue-700');
-          warningWrapper.classList.add('bg-red-100', 'border-red-500', 'text-red-700');
-          
+          warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700';
           resultWrapper.classList.add('hidden');
         }
-
       } catch (error) {
-        // Error de red
         warningText.textContent = 'No se pudo calcular la fecha. Revise su conexión.';
         warningWrapper.classList.remove('hidden');
-        warningWrapper.classList.add('bg-red-100', 'border-red-500', 'text-red-700');
+        warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700';
       }
     }
 
-    // 3. Añadir los "listeners" a los campos
     startDateInput.addEventListener('change', updateCalculations);
     periodTypeInput.addEventListener('change', updateCalculations);
-
   </script>
 {% endblock %}

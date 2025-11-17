@@ -12,12 +12,43 @@
 
   <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md">
     <p class="font-bold">Solicitud Rechazada</p>
-    <p>Estás solicitando una modificación para el periodo <strong>{{ vacation.start_date }}</strong> al <strong>{{ vacation.end_date }}</strong> del usuario <strong>{{ vacation.user.username }}</strong>.</p>
-    <p>Por favor, adjunta un nuevo documento y la razón de la solicitud.</p>
+    <p>Estás solicitando una modificación para el periodo de <strong>{{ vacation.user.username }}</strong>.</p>
   </div>
 
   <form action="{{ url_for('action_request_modification', vacation_id=vacation.id) }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto bg-white shadow-md rounded-lg p-8">
     
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-500">Fecha de Inicio Original:</label>
+        <span class="text-lg font-bold text-gray-700">{{ vacation.start_date }}</span>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-500">Tipo Original:</label>
+        <span class="text-lg font-bold text-gray-700">{{ vacation.type_period }} días</span>
+      </div>
+    </div>
+    
+    <hr class="my-6">
+    <h3 class="text-lg font-semibold text-blue-600 mb-4">Nuevos Valores Propuestos:</h3>
+    
+    <div class="mb-4">
+      <label for="start_date" class="block text-sm font-medium text-gray-700">Nueva Fecha de Inicio:</label>
+      <input type="date" name="start_date" id="start_date" required 
+             value="{{ vacation.start_date.strftime('%Y-%m-%d') }}"
+             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+    </div>
+    
+    <div class="mb-4">
+      <label for="period_type" class="block text-sm font-medium text-gray-700">Nuevo Tipo de Periodo (días):</label>
+      <select name="period_type" id="period_type" required
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <option value="30" {% if vacation.type_period == 30 %}selected{% endif %}>30 días</option>
+        <option value="15" {% if vacation.type_period == 15 %}selected{% endif %}>15 días</option>
+        <option value="8" {% if vacation.type_period == 8 %}selected{% endif %}>8 días</option>
+        <option value="7" {% if vacation.type_period == 7 %}selected{% endif %}>7 días</option>
+      </select>
+    </div>
+
     <div class="mb-4">
       <label for="reason_text" class="block text-sm font-medium text-gray-700">Motivo o Justificación:</label>
       <textarea name="reason_text" id="reason_text" rows="4" required 

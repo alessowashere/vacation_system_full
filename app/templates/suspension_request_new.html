@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Suspensión{% endblock %}
+
+{% block content %}
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">
+      Solicitar Suspensión de Vacaciones
+    </h1>
+    <a href="{{ url_for('vacation_details', vacation_id=vacation.id) }}" class="text-blue-500 hover:underline">&larr; Volver a Detalles</a>
+  </div>
+
+  <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-md">
+    <p class="font-bold">Vacación Aprobada</p>
+    <p>Estás solicitando una suspensión para el periodo de <strong>{{ vacation.user.username }}</strong> 
+       (del <strong>{{ vacation.start_date }}</strong> al <strong>{{ vacation.end_date }}</strong>).
+    </p>
+  </div>
+
+  <form action="{{ url_for('action_request_suspension', vacation_id=vacation.id) }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto bg-white shadow-md rounded-lg p-8">
+    
+    <div class="mb-4">
+      <label for="suspension_type" class="block text-sm font-medium text-gray-700">Tipo de Suspensión:</label>
+      <select name="suspension_type" id="suspension_type" required
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <option value="total">Suspensión Total (No gozó ningún día)</option>
+        <option value="parcial">Suspensión Parcial (Gozó algunos días)</option>
+      </select>
+    </div>
+
+    <div class="mb-4 hidden" id="partial_date_wrapper">
+      <label for="new_end_date" class="block text-sm font-medium text-gray-700">Último Día Gozado (Nueva Fecha de Fin):</label>
+      <input type="date" name="new_end_date" id="new_end_date"
+             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+      <p class="text-xs text-gray-500 mt-1">Indica el último día que el empleado gozó. El sistema recalculará los días usados.</p>
+    </div>
+
+    <div class="mb-4">
+      <label for="reason_text" class="block text-sm font-medium text-gray-700">Motivo o Justificación:</label>
+      <textarea name="reason_text" id="reason_text" rows="4" required 
+             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+    </div>
+
+    <div class="mb-6">
+      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento de Sustento (Obligatorio):</label>
+      <input type="file" name="file" id="file" required
+             class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+    </div>
+    
+    <button type="submit" 
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+      Enviar Solicitud de Suspensión
+    </button>
+  </form>
+
+  <script>
+    // Script para mostrar/ocultar el campo de fecha parcial
+    const typeSelect = document.getElementById('suspension_type');
+    const dateWrapper = document.getElementById('partial_date_wrapper');
+    const dateInput = document.getElementById('new_end_date');
+
+    typeSelect.addEventListener('change', function() {
+      if (this.value === 'parcial') {
+        dateWrapper.classList.remove('hidden');
+        dateInput.required = true;
+      } else {
+        dateWrapper.classList.add('hidden');
+        dateInput.required = false;
+      }
+    });
+  </script>
+{% endblock %}

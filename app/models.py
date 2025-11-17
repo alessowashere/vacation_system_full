@@ -1,5 +1,5 @@
 # app/models.py
-# (VERSIÓN PARTE 6)
+# (VERSIÓN PARTE 10)
 
 from sqlalchemy import Column, Integer, String, Date, ForeignKey, Boolean, Text, DateTime
 from sqlalchemy.orm import relationship
@@ -37,7 +37,7 @@ class VacationPeriod(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User")
 
-    consolidated_doc_path = Column(String(255), nullable=True) # Documento del Jefe
+    consolidated_doc_path = Column(String(255), nullable=True)
 
 class SystemConfig(Base):
     __tablename__ = "system_config"
@@ -46,23 +46,58 @@ class SystemConfig(Base):
     value = Column(String(255), nullable=True)
     description = Column(Text, nullable=True)
 
-# --- NUEVO MODELO (PARTE 6) ---
 class ModificationRequest(Base):
-    """
-    Almacena una solicitud de modificación de una vacación rechazada.
-    """
     __tablename__ = "modification_requests"
     id = Column(Integer, primary_key=True, index=True)
     
-    # La vacación original que fue rechazada
     vacation_period_id = Column(Integer, ForeignKey("vacation_periods.id"))
     vacation_period = relationship("VacationPeriod")
     
-    # El 'boss' que solicita el cambio
     requesting_user_id = Column(Integer, ForeignKey("users.id"))
     requesting_user = relationship("User")
     
     reason_text = Column(Text, nullable=False)
     attached_doc_path = Column(String(255), nullable=False)
-    status = Column(String(30), default="pending_review") # pending_review, approved, rejected
+    status = Column(String(30), default="pending_review") 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    new_start_date = Column(Date, nullable=True)
+    new_period_type = Column(Integer, nullable=True)
+    new_end_date = Column(Date, nullable=True)
+    new_days = Column(Integer, nullable=True)
+
+class VacationLog(Base):
+    __tablename__ = "vacation_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    
+    vacation_period_id = Column(Integer, ForeignKey("vacation_periods.id"))
+    vacation_period = relationship("VacationPeriod")
+    
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user = relationship("User")
+    
+    log_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# --- NUEVO MODELO (PARTE 10) ---
+class SuspensionRequest(Base):
+    """
+    Almacena una solicitud de suspensión de una vacación APROBADA.
+    """
+    __tablename__ = "suspension_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    
+    vacation_period_id = Column(Integer, ForeignKey("vacation_periods.id"))
+    vacation_period = relationship("VacationPeriod")
+    
+    requesting_user_id = Column(Integer, ForeignKey("users.id"))
+    requesting_user = relationship("User")
+    
+    suspension_type = Column(String(20), nullable=False) # "total" o "parcial"
+    reason_text = Column(Text, nullable=False)
+    attached_doc_path = Column(String(255), nullable=False)
+    status = Column(String(30), default="pending_review")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Solo para suspensiones parciales
+    new_end_date_parcial = Column(Date, nullable=True)

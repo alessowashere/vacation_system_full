@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Solicitud{% endblock %}
+
+{% block content %}
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">Editar Solicitud de Vacaciones</h1>
+    <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Dashboard</a>
+  </div>
+
+  <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md">
+    <p>Estás editando la solicitud de <strong>{{ vacation.user.username }}</strong> 
+       (Estado actual: <span class="font-bold">{{ vacation.status }}</span>).
+    </p>
+    <p>Solo puedes editar la fecha de inicio y el tipo de periodo.</p>
+  </div>
+  
+  <form action="{{ url_for('vacation_edit_submit', vacation_id=vacation.id) }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto">
+    
+    <div class="mb-4">
+      <label for="start_date" class="block text-sm font-medium text-gray-700">Fecha de Inicio:</label>
+      <input type="date" name="start_date" id="start_date" required 
+             value="{{ vacation.start_date.strftime('%Y-%m-%d') }}"
+             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+    </div>
+    
+    <div class="mb-4">
+      <label for="period_type" class="block text-sm font-medium text-gray-700">Tipo de Periodo (días):</label>
+      <select name="period_type" id="period_type" required
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <option value="30" {% if vacation.type_period == 30 %}selected{% endif %}>30 días</option>
+        <option value="15" {% if vacation.type_period == 15 %}selected{% endif %}>15 días</option>
+        <option value="8" {% if vacation.type_period == 8 %}selected{% endif %}>8 días</option>
+        <option value="7" {% if vacation.type_period == 7 %}selected{% endif %}>7 días</option>
+      </select>
+    </div>
+
+    <div class="mb-6">
+      <label for="file" class="block text-sm font-medium text-gray-700">Reemplazar Documento (Opcional):</label>
+      <input type="file" name="file" id="file"
+             class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+      {% if vacation.attached_file %}
+      <p class="text-xs text-gray-500 mt-2">
+        Archivo actual: <a href="{{ url_for('uploads', path=vacation.attached_file) }}" target="_blank" class="text-blue-500">{{ vacation.attached_file }}</a>
+      </p>
+      {% endif %}
+    </div>
+    
+    <button type="submit" 
+            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+      Guardar Cambios
+    </button>
+  </form>
+{% endblock %}

@@ -1,5 +1,5 @@
 # app/main.py
-# (VERSIÓN PARTE 6)
+# (VERSIÓN PARTE 10)
 
 import os
 from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
@@ -10,9 +10,10 @@ from fastapi.templating import Jinja2Templates
 from app import crud, models, schemas
 from app.db import SessionLocal, engine, Base
 from app.auth import get_current_user, create_access_token, get_current_manager_user
+from app.db import SessionLocal, get_db
+from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 
-# --- IMPORTA LOS ROUTERS ---
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 
@@ -49,12 +50,11 @@ def create_test_users():
 def seed_initial_data():
     db = SessionLocal()
     create_default_admin()
-    crud.seed_holidays(db) # De Parte 1
-    create_test_users()    # De Parte 2
-    crud.seed_settings(db) # De Parte 3
+    crud.seed_holidays(db)
+    create_test_users()
+    crud.seed_settings(db)
     db.close()
 
-# Ejecuta todas las funciones de precarga
 seed_initial_data()
 
 templates = Jinja2Templates(directory="app/templates")
@@ -85,7 +85,7 @@ def login_page(request: Request):
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = crud.authenticate_user(username, password)
     if not user:
-        error_url = request.url_for('login_page') + "?error=1"
+        error_url = str(request.url_for('login_page')) + "?error=1"
         return RedirectResponse(url=error_url, status_code=302)
         
     token = create_access_token({"sub": user.username})
@@ -101,35 +101,35 @@ def logout(request: Request):
 
 # RUTA DASHBOARD
 @app.get("/app", response_class=HTMLResponse, name="dashboard")
-def dashboard(request: Request, current=Depends(get_current_user)):
+def dashboard(
+    request: Request, 
+    current=Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
     user = current
     tmpl = templates.get_template("dashboard.html")
-    db = SessionLocal()
-    data = crud.get_dashboard_data(db, user) # 'data' ahora es un dict con listas
-    db.close()
+    data = crud.get_dashboard_data(db, user)
     
     error_msg = None
     error_type = request.query_params.get("error")
-    if error_type == "balance":
-        error_msg = "Error: No tienes suficientes días de balance para esta solicitud."
-    elif error_type == "start_date":
-        error_msg = "Error: La fecha de inicio no es válida (es fin de semana o feriado)."
-    elif error_type == "general":
-        error_msg = "Error: Ocurrió un problema al crear la solicitud."
+    if error_type:
+        error_msg = request.query_params.get("msg", "Ocurrió un error.")
     
     return tmpl.render({
         "request": request, 
         "user": user, 
-"data": data,
+        "data": data,
         "error_msg": error_msg 
     })
 
 # Rutas de Creación de Vacaciones
 @app.get("/vacations/new", response_class=HTMLResponse, name="vacation_new_form")
-def new_vacation_form(request: Request, current=Depends(get_current_user)):
-    db = SessionLocal()
+def new_vacation_form(
+    request: Request, 
+    current=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     remaining_balance = crud.get_user_vacation_balance(db, current)
-    db.close()
     
     tmpl = templates.get_template("vacation_new.html")
     return tmpl.render({
@@ -139,7 +139,14 @@ def new_vacation_form(request: Request, current=Depends(get_current_user)):
     })
 
 @app.post("/vacations", name="vacation_create")
-async def create_vacation(request: Request, start_date: str = Form(...), period_type: int = Form(...), file: UploadFile = File(None), current=Depends(get_current_user)):
+async def create_vacation(
+    request: Request, 
+    start_date: str = Form(...), 
+    period_type: int = Form(...), 
+    file: UploadFile = File(None), 
+    current=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     
     file_path_in_db = None
     if file and file.filename: 
@@ -151,7 +158,7 @@ async def create_vacation(request: Request, start_date: str = Form(...), period_
             f.write(await file.read())
             
     try:
-        vp = crud.create_vacation(current, start_date, period_type, file_path_in_db)
+        vp = crud.create_vacation(db, current, start_date, period_type, file_path_in_db)
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
     
     except Exception as e:
@@ -162,30 +169,24 @@ async def create_vacation(request: Request, start_date: str = Form(...), period_
         elif "Invalid start date" in error_str:
             error_type = "start_date"
             
-        error_url = request.url_for('dashboard') + f"?error={error_type}"
+        error_url = str(request.url_for('dashboard')) + f"?error={error_type}&msg={error_str}"
         return RedirectResponse(url=error_url, status_code=302)
 
-# --- NUEVA RUTA (PARTE 6) ---
+# Ruta de Modificación (de Parte 6)
 @app.get("/vacation/{vacation_id}/modify", response_class=HTMLResponse, name="vacation_modify_form")
 def modify_vacation_form(
     request: Request,
     vacation_id: int,
-    current=Depends(get_current_manager_user) # Solo managers
+    current=Depends(get_current_manager_user),
+    db: Session = Depends(get_db)
 ):
-    """
-    Muestra el formulario para solicitar la modificación de una solicitud rechazada.
-    """
-    db = SessionLocal()
     vacation = crud.get_vacation_by_id(db, vacation_id)
-    db.close()
 
-    # Validar
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     if vacation.user.area != current.area:
         raise HTTPException(status_code=403, detail="No autorizado")
     if vacation.status != 'rejected':
-        # Solo se pueden modificar las rechazadas
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
 
     tmpl = templates.get_template("modification_request_new.html")
@@ -194,7 +195,137 @@ def modify_vacation_form(
         "user": current,
         "vacation": vacation
     })
+
+# Rutas de Edición (de Parte 8)
+@app.get("/vacation/{vacation_id}/edit", response_class=HTMLResponse, name="vacation_edit_form")
+def edit_vacation_form(
+    request: Request,
+    vacation_id: int,
+    current=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    vacation = crud.get_vacation_by_id(db, vacation_id)
+    
+    if not crud.check_edit_permission(vacation, current):
+        error_url = str(request.url_for('dashboard')) + "?error=edit_perm&msg=No tienes permiso para editar."
+        return RedirectResponse(url=error_url, status_code=302)
+
+    tmpl = templates.get_template("vacation_edit.html")
+    return tmpl.render({
+        "request": request, 
+        "user": current,
+        "vacation": vacation
+    })
+
+@app.post("/vacation/{vacation_id}/edit", name="vacation_edit_submit")
+async def edit_vacation_submit(
+    request: Request,
+    vacation_id: int,
+    start_date: str = Form(...),
+    period_type: int = Form(...),
+    file: UploadFile = File(None),
+    current=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    vacation = crud.get_vacation_by_id(db, vacation_id)
+    
+    if not crud.check_edit_permission(vacation, current):
+        error_url = str(request.url_for('dashboard')) + "?error=edit_perm&msg=No tienes permiso para editar."
+        return RedirectResponse(url=error_url, status_code=302)
+    
+    file_path_in_db = vacation.attached_file
+    if file and file.filename: 
+        uploads_dir = "uploads"
+        file_path_in_db = f"{current.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+        file_disk_path = os.path.join(uploads_dir, file_path_in_db)
+        
+        with open(file_disk_path, "wb") as f:
+            f.write(await file.read())
+            
+    try:
+        crud.update_vacation_details(
+            db,
+            vacation=vacation,
+            start_date_str=start_date,
+            type_period=period_type,
+            file_name=file_path_in_db,
+            actor=current
+        )
+        return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
+    
+    except Exception as e:
+        error_str = str(e)
+        error_type = "general"
+        if "balance" in error_str:
+            error_type = "balance"
+        elif "Invalid start date" in error_str:
+            error_type = "start_date"
+            
+        error_url = str(request.url_for('dashboard')) + f"?error={error_type}&msg={error_str}"
+        return RedirectResponse(url=error_url, status_code=302)
+
+# Ruta de Detalles (de Parte 9)
+@app.get("/vacation/{vacation_id}/details", response_class=HTMLResponse, name="vacation_details")
+def vacation_details(
+    request: Request,
+    vacation_id: int,
+    current=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    vacation = crud.get_vacation_by_id(db, vacation_id)
+    
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    
+    can_view = False
+    if current.role in ['admin', 'hr']: can_view = True
+    elif current.role == 'manager' and current.area == vacation.user.area: can_view = True
+    elif current.id == vacation.user_id: can_view = True
+        
+    if not can_view:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    logs = crud.get_logs_for_vacation(db, vacation_id=vacation_id)
+
+    tmpl = templates.get_template("vacation_details.html")
+    return tmpl.render({
+        "request": request, 
+        "user": current,
+        "vacation": vacation,
+        "logs": logs
+    })
+
+# --- NUEVA RUTA (PARTE 10) ---
+@app.get("/vacation/{vacation_id}/suspend", response_class=HTMLResponse, name="vacation_suspend_form")
+def suspend_vacation_form(
+    request: Request,
+    vacation_id: int,
+    current=Depends(get_current_manager_user), # Solo managers
+    db: Session = Depends(get_db)
+):
+    """
+    Muestra el formulario para solicitar la suspensión de una vacación APROBADA.
+    """
+    vacation = crud.get_vacation_by_id(db, vacation_id)
+
+    # Validar
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if vacation.user.area != current.area:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if vacation.status != 'approved':
+        # Solo se pueden suspender las aprobadas
+        error_url = str(request.url_for('dashboard')) + f"?error=general&msg=Solo se pueden suspender solicitudes APROBADAS."
+        return RedirectResponse(url=error_url, status_code=302)
+
+    tmpl = templates.get_template("suspension_request_new.html")
+    return tmpl.render({
+        "request": request, 
+        "user": current,
+        "vacation": vacation
+    })
 # --- FIN DE NUEVA RUTA ---
+
 
 # ---- INCLUIR ROUTERS ----
 from app.api import api_router
