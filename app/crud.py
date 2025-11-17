@@ -19,35 +19,12 @@ from sqlalchemy import func, and_ # <-- AÑADIR 'and_'
 from typing import List, Dict, Any
 
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
-def validate_password(password: str):
-    """
-    Valida la contraseña contra la política:
-    - 8+ caracteres
-    - 1+ mayúscula
-    - 1+ número
-    - 1+ carácter especial
-    """
-    if len(password) < 8:
-        raise ValueError("La contraseña debe tener al menos 8 caracteres.")
-    if not re.search(r"[A-Z]", password):
-        raise ValueError("La contraseña debe contener al menos una mayúscula.")
-    if not re.search(r"[0-9]", password):
-        raise ValueError("La contraseña debe contener al menos un número.")
-    if not re.search(r"[\W_]", password): # \W es "no-alfanumérico"
-        raise ValueError("La contraseña debe contener al menos un carácter especial (ej. !@#$).")
+
 # --- FIN DE LA FUNCIÓN ---
 def get_user_by_username(db, username):
     return db.query(models.User).filter(models.User.username==username).first()
 
-def authenticate_user(username, password):
-    db = SessionLocal()
-    user = get_user_by_username(db, username)
-    db.close()
-    if not user:
-        return None
-    if not pwd_context.verify(password, user.password_hash):
-        return None
-    return user
+
 
 def create_user(username, password, role="employee", full_name=None, email=None, area=None, vacation_days_total=30, manager_id=None):
     
@@ -582,25 +559,7 @@ def reject_suspension(db: Session, sus_id: int, actor: models.User):
     
     db.commit()
     return sus_req
-def change_user_password(db: Session, user: models.User, new_password: str):
-    """
-    Cambia la contraseña de un usuario, valida la política,
-    y marca 'force_password_change' como False.
-    """
-    # 1. Validar la nueva contraseña
-    validate_password(new_password) # Esto lanzará ValueError si falla
 
-    # 2. (Opcional) No permitir que sea la misma contraseña
-    if pwd_context.verify(new_password, user.password_hash):
-        raise ValueError("La nueva contraseña no puede ser la misma que la anterior.")
-        
-    # 3. Hashear y guardar
-    user.password_hash = pwd_context.hash(new_password)
-    user.force_password_change = False
-    
-    db.commit()
-    db.refresh(user)
-    return user
 
 # ... (después de change_user_password)
 
@@ -646,19 +605,6 @@ def admin_update_user(
     db.refresh(user)
     return user
 
-def admin_reset_password(db: Session, user: models.User):
-    """
-    Restablece la contraseña de un usuario a 'Temporal123!'
-    y fuerza el cambio en el próximo login.
-    """
-    # Esta contraseña SÍ cumple la política de la Fase 4
-    default_password = "Temporal123!" 
-    
-    user.password_hash = pwd_context.hash(default_password)
-    user.force_password_change = True
-    
-    db.commit()
-    db.refresh(user)
-    return user
+
 
 # --- FIN DE NUEVAS FUNCIONES ---

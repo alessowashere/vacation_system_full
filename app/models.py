@@ -11,19 +11,12 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     full_name = Column(String(120))
-    email = Column(String(120))
-    password_hash = Column(String(255), nullable=False)
+    email = Column(String(120), unique=True, index=True) # <-- Hice el email único
     role = Column(String(20), default="employee")
     area = Column(String(120), nullable=True)
-    force_password_change = Column(Boolean, default=True)
-
-    # --- AÑADIR ESTAS LÍNEAS (FASE 5) ---
     vacation_days_total = Column(Integer, default=30)
-    
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     manager = relationship("User", remote_side=[id], backref="subordinates")
-    # --- FIN DE LÍNEAS A AÑADIR ---
-
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Holiday(Base):

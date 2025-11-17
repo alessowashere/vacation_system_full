@@ -11,3 +11,5 @@ aiofiles
 email-validator
 itsdangerous
 alembic  # <-- AÑADIR ESTA LÍNEA
+authlib
+httpx

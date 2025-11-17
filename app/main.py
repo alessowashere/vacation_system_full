@@ -9,45 +9,17 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
 from app import crud, models, schemas
 from app.db import SessionLocal, engine, Base
-from app.auth import get_current_user, create_access_token, get_current_manager_user
+from app.auth import get_current_user, create_access_token, get_current_manager_user, oauth
 from app.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
+
 
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 
 # app/main.py
 
-def create_default_admin():
-    print("--- CHEQUEANDO USUARIO ADMIN POR DEFECTO ---")
-    db = SessionLocal()
-    default_admin = crud.get_user_by_username(db, "admin")
-    if not default_admin:
-        print("--- CREANDO USUARIO ADMIN POR DEFECTO (admin/Temporal123!) ---")
-        crud.create_user("admin", "Temporal123!", role="admin") # <-- CONTRASEÑA CAMBIADA
-        print("--- USUARIO ADMIN CREADO ---")
-    else:
-        print("--- USUARIO ADMIN YA EXISTE ---")
-    db.close()
-
-def create_test_users():
-    print("--- CHEQUEANDO USUARIOS DE PRUEBA ---")
-    db = SessionLocal()
-    
-    if not crud.get_user_by_username(db, "hr_user"):
-        crud.create_user("hr_user", "Temporal123!", role="hr", full_name="RRHH User") # <-- CONTRASEÑA CAMBIADA
-        print("--- CREADO USUARIO hr_user ---")
-
-    if not crud.get_user_by_username(db, "jefe_sist"):
-        crud.create_user("jefe_sist", "Temporal123!", role="manager", full_name="Jefe de Sistemas", area="Sistemas") # <-- CONTRASEÑA CAMBIADA
-        print("--- CREADO USUARIO jefe_sist (manager) ---")
-        
-    if not crud.get_user_by_username(db, "emp_sist"):
-        crud.create_user("emp_sist", "Temporal123!", role="employee", full_name="Empleado de Sistemas", area="Sistemas") # <-- CONTRASEÑA CAMBIADA
-        print("--- CREADO USUARIO emp_sist (employee) ---")
-        
-    db.close()
 
 def seed_initial_data():
     db = SessionLocal()
@@ -71,81 +43,92 @@ uploads_dir = "uploads"
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-
+app.state.oauth = oauth
 @app.get("/", response_class=HTMLResponse, name="home")
 def home(request: Request):
     tmpl = templates.get_template("home.html")
     return tmpl.render({"request": request})
 
 # AUTH routes
+# --- RUTAS DE AUTENTICACIÓN (REESCRITAS PARA CAMINO B) ---
+
 @app.get("/login", response_class=HTMLResponse, name="login_page")
 def login_page(request: Request):
+    """
+    Muestra la página de login (que ahora solo tiene un botón).
+    """
     tmpl = templates.get_template("login.html")
-    return tmpl.render({"request": request})
+    # Pasamos el dominio para mostrarlo (opcional)
+    return tmpl.render({
+        "request": request,
+        "GOOGLE_LOGIN_DOMAIN": "uandina.edu.pe" 
+    })
 
-@app.post("/login", name="login_submit")
-def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    user = crud.authenticate_user(username, password)
-    if not user:
-        error_url = str(request.url_for('login_page')) + "?error=1"
+@app.get("/login/google", name="login_google")
+async def login_google(request: Request):
+    """
+    Paso 1: Redirige al usuario a la página de inicio de sesión de Google.
+    """
+    # Esta es la URL de callback que pusiste en Google Cloud
+    redirect_uri = request.url_for('auth_google_callback')
+    return await request.app.state.oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get("/auth/google/callback", name="auth_google_callback")
+async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
+    """
+    Paso 2: Google redirige al usuario de vuelta aquí después del login.
+    """
+    try:
+        # Obtenemos el token de Google
+        token = await request.app.state.oauth.google.authorize_access_token(request)
+    except Exception as e:
+        # El usuario canceló o hubo un error
+        return RedirectResponse(url=request.url_for('login_page'))
+
+    # Obtenemos la información del usuario (email, nombre, etc.)
+    user_info = token.get('userinfo')
+    if not user_info:
+        return RedirectResponse(url=request.url_for('login_page'))
+
+    user_email = user_info.get('email')
+    user_domain = user_info.get('hd')
+
+    # --- ¡LA VALIDACIÓN MÁS IMPORTANTE! ---
+    # Asegurarnos de que solo entren usuarios de nuestro dominio
+    if user_domain != "uandina.edu.pe":
+        error_url = str(request.url_for('login_page')) + "?error=domain"
         return RedirectResponse(url=error_url, status_code=302)
-        
-    token = create_access_token({"sub": user.username})
+
+    # Verificar si el usuario de Google existe en nuestra BD (cargada del CSV)
+    user_in_db = db.query(models.User).filter(models.User.email == user_email).first()
+
+    if not user_in_db:
+        # El usuario es de @uandina.edu.pe pero no está en nuestra BD de RRHH.
+        error_url = str(request.url_for('login_page')) + "?error=not_found"
+        return RedirectResponse(url=error_url, status_code=302)
+
+    # --- ÉXITO ---
+    # El usuario es válido. Creamos nuestro propio token de sesión (JWT)
+    # y lo guardamos en una cookie.
+    access_token = create_access_token(data={"sub": user_in_db.email})
+
     response = RedirectResponse(url=request.url_for('dashboard'), status_code=302)
-    response.set_cookie("access_token", token, httponly=True)
+    response.set_cookie("access_token", access_token, httponly=True, secure=True, samesite="lax")
     return response
 
 @app.get("/logout", name="logout")
 def logout(request: Request):
+    """
+    Borra nuestra cookie de sesión.
+    """
     response = RedirectResponse(url=request.url_for('home'), status_code=302)
     response.delete_cookie("access_token")
     return response
 
+# --- FIN DE RUTAS DE AUTENTICACIÓN ---
+
 # --- AÑADIR ESTAS RUTAS (FASE 4.2) ---
 
-@app.get("/change-password", response_class=HTMLResponse, name="change_password_form")
-def change_password_form(request: Request, current=Depends(get_current_user)):
-    """
-    Muestra el formulario de cambio de contraseña obligatorio.
-    'get_current_user' (modificado) permitirá el acceso a esta página.
-    """
-    error_msg = request.query_params.get("error_msg")
-    
-    tmpl = templates.get_template("force_change_password.html")
-    return tmpl.render({
-        "request": request,
-        "user": current,
-        "error_msg": error_msg
-    })
-
-@app.post("/change-password", name="change_password_submit")
-def change_password_submit(
-    request: Request, 
-    current=Depends(get_current_user), 
-    db: Session = Depends(get_db),
-    new_password: str = Form(...),
-    confirm_password: str = Form(...)
-):
-    """
-    Procesa el formulario de cambio de contraseña.
-    """
-    error_url = request.url_for('change_password_form')
-
-    if new_password != confirm_password:
-        error_url += "?error_msg=Las contraseñas no coinciden."
-        return RedirectResponse(url=error_url, status_code=302)
-
-    try:
-        crud.change_user_password(db=db, user=current, new_password=new_password)
-    except ValueError as e:
-        error_url += f"?error_msg={str(e)}"
-        return RedirectResponse(url=error_url, status_code=302)
-    except Exception as e:
-        error_url += f"?error_msg=Error inesperado: {str(e)}"
-        return RedirectResponse(url=error_url, status_code=302)
-    
-    # Éxito, redirigir al dashboard (ahora la dependencia get_current_user lo permitirá)
-    return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
 
 # --- FIN DE NUEVAS RUTAS ---
 

@@ -11,6 +11,8 @@ services:
       - DB_USER=admin
       - DB_PASSWORD=Redlabel@
       - DB_NAME=vacation_system
+      - GOOGLE_CLIENT_ID=http://965044613148-re34p879kimc8msr3hr74mnqdlidvb3l.apps.googleusercontent.com/
+      - GOOGLE_CLIENT_SECRET=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
     depends_on:
       vacation_db:
         condition: service_healthy
