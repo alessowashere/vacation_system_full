@@ -23,9 +23,8 @@ from app.routers import actions as actions_router
 
 def seed_initial_data():
     db = SessionLocal()
-    create_default_admin()
+    # Estas dos funciones son correctas y deben quedarse
     crud.seed_holidays(db)
-    create_test_users()
     crud.seed_settings(db)
     db.close()
 
