@@ -13,3 +13,7 @@ itsdangerous
 alembic  # <-- AÑADIR ESTA LÍNEA
 authlib
 httpx
+fastapi-mail>=1.4.1
+apscheduler>=3.10.1
+pandas>=2.0.0
+openpyxl>=3.1.0

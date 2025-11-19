@@ -30,7 +30,6 @@ def create_user(username, password, role="employee", full_name=None, email=None,
     
     # --- MODIFICACIÓN FASE 5.1 ---
     # Ahora la validación SÍ lanza un error,
-    validate_password(password)
     # --- FIN DE LA MODIFICACIÓN ---
 
     db = SessionLocal()

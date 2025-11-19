@@ -1,21 +1,17 @@
-# app/routers/actions.py
-# (VERSIÓN PARTE 10)
-
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, UploadFile, File
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 import os
-from typing import Optional # Importar Optional
-
-from app import crud, models
-from app.auth import get_current_hr_user, get_current_manager_user, get_current_user
+from typing import Optional
+from app import crud, models, schemas
+from app.auth import get_current_user, get_current_manager_user, get_current_hr_user
 from app.db import get_db
+from app.utils.email import send_email_async  # Importamos la utilidad
 
 router = APIRouter(
-    prefix="/actions",
-    tags=["Actions"],
-    dependencies=[Depends(get_current_user)]
+    prefix="/gestion/actions",
+    tags=["Actions"]
 )
 
 @router.post("/vacation/{vacation_id}/delete", name="action_delete_vacation")
@@ -59,53 +55,130 @@ async def submit_area_to_hr(
 async def submit_individual_vacation(
     request: Request,
     vacation_id: int,
-    file: UploadFile = File(...), # <-- AHORA ESPERA UN ARCHIVO
-    current=Depends(get_current_manager_user),
+    file: UploadFile = File(...),
+    current: models.User = Depends(get_current_manager_user),
     db: Session = Depends(get_db)
 ):
+    """
+    El JEFE sube el documento individual y envía la solicitud a RRHH.
+    """
     vacation = crud.get_vacation_by_id(db, vacation_id)
+    # Validar que la vacación exista y pertenezca al área del jefe actual
     if not vacation or vacation.user.area != current.area:
-        raise HTTPException(status_code=403, detail="No autorizado")
+        raise HTTPException(status_code=403, detail="No autorizado o solicitud no encontrada")
 
-    # Validar si el archivo viene (aunque el form es 'required', doble check)
+    # Validar archivo
     if not file or not file.filename:
-        error_url = str(request.url_for('dashboard')) + f"?error=general&msg=No se puede enviar sin adjuntar un documento."
+        error_url = str(request.url_for('dashboard')) + "?error=general&msg=Debe adjuntar el documento firmado."
         return RedirectResponse(url=error_url, status_code=302)
 
-    # Guardar el archivo del jefe
+    # Guardar archivo
     uploads_dir = "uploads"
-    file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    # Limpiar nombre de archivo para evitar problemas
+    safe_filename = "".join(c for c in file.filename if c.isalnum() or c in (' ._-'))
+    file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_filename}"
     file_disk_path = os.path.join(uploads_dir, file_name)
 
-    with open(file_disk_path, "wb") as f:
-        f.write(await file.read())
+    try:
+        content = await file.read()
+        with open(file_disk_path, "wb") as f:
+            f.write(content)
+    except Exception as e:
+        print(f"Error guardando archivo: {e}")
+        raise HTTPException(status_code=500, detail="Error al guardar el archivo")
 
+    # Actualizar estado en BD
     if vacation.status == 'draft':
-        crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name) # <-- Pasamos el
+        # Esta función en crud debe actualizar el estado a 'submitted' y guardar el path
+        crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name)
+        
+        # --- NOTIFICACIÓN AL ADMIN / RRHH (Opcional) ---
+        # Aquí podrías avisar a RRHH que hay una nueva solicitud pendiente
+        
+    return RedirectResponse(url=str(request.url_for('dashboard')) + "?success_msg=Enviado a RRHH correctamente.", status_code=303)
+
+
 
 
 @router.post("/vacation/{vacation_id}/approve", name="action_approve_vacation")
-def approve_vacation(
+async def approve_vacation(
     request: Request,
     vacation_id: int,
-    current=Depends(get_current_hr_user),
+    current: models.User = Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
+    """
+    RRHH aprueba la solicitud final.
+    """
     vacation = crud.get_vacation_by_id(db, vacation_id)
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
     crud.update_vacation_status(db, vacation=vacation, new_status="approved", actor=current)
-    return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
+    
+    # --- NOTIFICACIÓN AL EMPLEADO ---
+    # Enviamos el correo ANTES de retornar la respuesta
+    if vacation.user.email:
+        formatted_start = vacation.start_date.strftime('%d/%m/%Y')
+        formatted_end = vacation.end_date.strftime('%d/%m/%Y')
+        
+        await send_email_async(
+            subject="✅ Solicitud de Vacaciones APROBADA",
+            email_to=[vacation.user.email],
+            body=f"""
+            <div style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: #2ecc71;">¡Tu solicitud ha sido Aprobada!</h2>
+                <p>Hola <b>{vacation.user.full_name}</b>,</p>
+                <p>La Dirección de Recursos Humanos ha aprobado tus vacaciones.</p>
+                <hr>
+                <p><b>📅 Desde:</b> {formatted_start}</p>
+                <p><b>📅 Hasta:</b> {formatted_end}</p>
+                <p><b>🗓️ Días:</b> {vacation.days_count}</p>
+                <hr>
+                <p>Disfruta de tu descanso.</p>
+                <p style="font-size: 12px; color: #777;">Sistema de Gestión de Vacaciones - UAndina</p>
+            </div>
+            """
+        )
+
+    return RedirectResponse(url=str(request.url_for("dashboard")) + "?success_msg=Solicitud Aprobada y notificada.", status_code=303)
+
 
 
 @router.post("/vacation/{vacation_id}/reject", name="action_reject_vacation")
-def reject_vacation(
+async def reject_vacation(
     request: Request,
     vacation_id: int,
-    current=Depends(get_current_hr_user),
+    current: models.User = Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
+    """
+    RRHH rechaza la solicitud.
+    """
     vacation = crud.get_vacation_by_id(db, vacation_id)
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
     crud.update_vacation_status(db, vacation=vacation, new_status="rejected", actor=current)
-    return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
+
+    # --- NOTIFICACIÓN AL EMPLEADO ---
+    if vacation.user.email:
+        await send_email_async(
+            subject="❌ Solicitud de Vacaciones RECHAZADA",
+            email_to=[vacation.user.email],
+            body=f"""
+            <div style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: #e74c3c;">Solicitud Rechazada</h2>
+                <p>Hola <b>{vacation.user.full_name}</b>,</p>
+                <p>Tu solicitud de vacaciones para las fechas {vacation.start_date} al {vacation.end_date} ha sido observada o rechazada por RRHH.</p>
+                <p>Por favor, comunícate con tu jefe directo o con la oficina de RRHH para más detalles.</p>
+            </div>
+            """
+        )
+
+    return RedirectResponse(url=str(request.url_for("dashboard")) + "?success_msg=Solicitud Rechazada.", status_code=303)
 
 @router.post("/vacation/{vacation_id}/modify", name="action_request_modification")
 async def request_modification(
@@ -258,3 +331,54 @@ def reject_suspension(
     """Rechaza la solicitud de suspensión."""
     crud.reject_suspension(db, sus_id=sus_id, actor=current)
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
+
+@router.post("/vacation/request", name="action_request_vacation")
+async def request_vacation_create(
+    request: Request,
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    current: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    El Empleado crea la solicitud inicial (Draft).
+    """
+    # Convertir fechas
+    try:
+        dt_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        dt_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return RedirectResponse(url=str(request.url_for('dashboard')) + "?error=Fechas inválidas", status_code=302)
+    
+    # Lógica de validación de saldo (simplificada, debería estar en logic/)
+    # ...
+    
+    # Crear en BD
+    try:
+        new_vacation = crud.create_vacation_request(db, user_id=current.id, start_date=dt_start, end_date=dt_end)
+    except Exception as e:
+        return RedirectResponse(url=str(request.url_for('dashboard')) + f"?error={str(e)}", status_code=302)
+
+    # --- NOTIFICACIÓN AL JEFE ---
+    # Buscamos al jefe del usuario
+    if current.manager and current.manager.email:
+        approval_link = f"http://dataepis.uandina.pe:49262/gestion/" # Ajusta esta URL a tu IP real
+        
+        await send_email_async(
+            subject=f"📩 Nueva Solicitud: {current.full_name}",
+            email_to=[current.manager.email],
+            body=f"""
+            <div style="font-family: Arial, sans-serif;">
+                <h3>Nueva Solicitud de Vacaciones</h3>
+                <p>El colaborador <b>{current.full_name}</b> ({current.area}) ha solicitado vacaciones.</p>
+                <ul>
+                    <li><b>Desde:</b> {dt_start}</li>
+                    <li><b>Hasta:</b> {dt_end}</li>
+                </ul>
+                <p>Por favor, ingresa al sistema para descargar el formato y tramitar la solicitud.</p>
+                <a href="{approval_link}" style="background-color:#3498db; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Ir al Sistema</a>
+            </div>
+            """
+        )
+
+    return RedirectResponse(url=str(request.url_for('dashboard')) + "?success_msg=Solicitud creada exitosamente. Se notificó a tu jefe.", status_code=303)

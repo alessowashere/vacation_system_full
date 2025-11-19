@@ -13,6 +13,14 @@ services:
       - DB_NAME=vacation_system
       - GOOGLE_CLIENT_ID=965044613148-re34p879kimc8msr3hr74mnqdlidvb3l.apps.googleusercontent.com
       - GOOGLE_CLIENT_SECRET=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
+      - MAIL_USERNAME=afernandezl@uandina.edu.pe
+      - MAIL_PASSWORD=rgpm hlka jdxr ryjn
+      - MAIL_FROM=afernandezl@uandina.edu.pe
+      - MAIL_PORT=587
+      - MAIL_SERVER=smtp.gmail.com
+      - MAIL_FROM_NAME=RRHH UAndina
+      - MAIL_STARTTLS=True
+      - MAIL_SSL_TLS=False
     depends_on:
       vacation_db:
         condition: service_healthy
