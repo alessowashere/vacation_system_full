@@ -15,9 +15,9 @@
 
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">
-      Dashboard <span class="text-gray-500 font-normal">- {{ user.username }} ({{ user.role }})</span>
+      Dashboard <span class="text-gray-500 font-normal">- {{ user.full_name or user.username }} ({{ user.role }})</span>
     </h1>
-    <div>
+    <div class="flex items-center space-x-4">
       {% if user.role == 'admin' %}
         <a href="{{ url_for('admin_dashboard') }}" class="inline-block bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-sm transition duration-300">
           Admin Panel
@@ -26,7 +26,7 @@
       <a href="{{ url_for('vacation_new_form') }}" class="inline-block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm transition duration-300">
         Nueva Solicitud
       </a>
-      <a href="{{ url_for('logout') }}" class="inline-block text-gray-500 hover:text-red-600 font-medium py-2 px-4 rounded text-sm transition duration-300">
+      <a href="{{ url_for('logout') }}" class="inline-block text-gray-500 hover:text-red-600 font-medium text-sm transition duration-300">
         Salir
       </a>
     </div>
@@ -175,15 +175,14 @@
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
-              <th scope="col" class
-="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
               <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody id="tabla-proximos" class="bg-white divide-y divide-gray-200">
             {% for v in data.upcoming_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">
                   {{ v.start_date }} al {{ v.end_date }}
@@ -230,7 +229,7 @@
           <tbody id="tabla-borradores" class="bg-white divide-y divide-gray-200">
             {% for v in data.draft_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">
                   {{ v.start_date }} al {{ v.end_date }}
@@ -274,7 +273,7 @@
             {% for v in data.pending_vacations %}
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.username }}</a>
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
@@ -326,10 +325,10 @@
           <tbody id="tabla-modificaciones" class="bg-white divide-y divide-gray-200">
             {% for m in data.pending_modifications %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.full_name or m.requesting_user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=m.vacation_period.id) }}" class="text-blue-600 hover:underline">
-                  {{ m.vacation_period.user.username }}
+                  {{ m.vacation_period.user.full_name or m.vacation_period.user.username }}
                 </a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -380,10 +379,10 @@
           <tbody id="tabla-suspensiones" class="bg-white divide-y divide-gray-200">
             {% for s in data.pending_suspensions %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.full_name or s.requesting_user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=s.vacation_period.id) }}" class="text-blue-600 hover:underline">
-                  {{ s.vacation_period.user.username }}
+                  {{ s.vacation_period.user.full_name or s.vacation_period.user.username }}
                 </a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{{ s.suspension_type }}</td>
@@ -435,7 +434,7 @@
           <tbody id="tabla-historico" class="bg-white divide-y divide-gray-200">
             {% for v in data.finalized_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -636,7 +635,7 @@
             {% for v in data.upcoming_vacations %}
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.username }}</a>
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
@@ -680,7 +679,7 @@
             {% for v in data.pending_vacations %}
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.username }}</a>
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
@@ -732,10 +731,10 @@
           <tbody id="tabla-modificaciones-hr" class="bg-white divide-y divide-gray-200">
             {% for m in data.pending_modifications %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.full_name or m.requesting_user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=m.vacation_period.id) }}" class="text-blue-600 hover:underline">
-                  {{ m.vacation_period.user.username }}
+                  {{ m.vacation_period.user.full_name or m.vacation_period.user.username }}
                 </a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -785,10 +784,10 @@
           <tbody id="tabla-suspensiones-hr" class="bg-white divide-y divide-gray-200">
             {% for s in data.pending_suspensions %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.full_name or s.requesting_user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <a href="{{ url_for('vacation_details', vacation_id=s.vacation_period.id) }}" class="text-blue-600 hover:underline">
-                  {{ s.vacation_period.user.username }}
+                  {{ s.vacation_period.user.full_name or s.vacation_period.user.username }}
                 </a>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{{ s.suspension_type }}</td>
@@ -840,7 +839,7 @@
           <tbody id="tabla-borradores-hr" class="bg-white divide-y divide-gray-200">
             {% for v in data.draft_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.days }}</td>
@@ -878,7 +877,7 @@
           <tbody id="tabla-historico-hr" class="bg-white divide-y divide-gray-200">
             {% for v in data.finalized_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">

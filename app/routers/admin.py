@@ -1,12 +1,11 @@
 # app/routers/admin.py
-# (VERSIÓN CORREGIDA PARTE 3)
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import date, datetime
-from typing import Dict, Any, Optional # <-- AÑADIR Optional
+from typing import Dict, Any, Optional, List
 
 from app import crud, models, schemas
 from app.auth import get_current_admin_user
@@ -14,9 +13,9 @@ from app.db import SessionLocal
 
 # Configuración del router
 router = APIRouter(
-    prefix="/gestion/admin", # <-- CORREGIDO CON PREFIJO
+    prefix="/gestion/admin", 
     tags=["Admin"],
-    dependencies=[Depends(get_current_admin_user)] # ¡Importante! Protege todas las rutas.
+    dependencies=[Depends(get_current_admin_user)]
 )
 
 templates = Jinja2Templates(directory="app/templates")
@@ -34,29 +33,17 @@ def admin_dashboard(request: Request):
     tmpl = templates.get_template("admin_dashboard.html")
     return tmpl.render({"request": request})
 
-# --- RUTAS DE FERIADOS (DE PARTE 1) ---
+# --- RUTAS DE FERIADOS ---
 
 @router.get("/feriados", response_class=HTMLResponse, name="admin_feriados")
 def admin_feriados(request: Request, db: Session = Depends(get_db)):
-    """Página para gestionar feriados."""
     year = datetime.now().year
     holidays = crud.get_holidays_by_year(db, year)
-    
     tmpl = templates.get_template("admin_feriados.html")
-    return tmpl.render({
-        "request": request,
-        "holidays": holidays,
-        "year": year
-    })
+    return tmpl.render({"request": request, "holidays": holidays, "year": year})
 
 @router.post("/feriados", name="admin_create_holiday")
-def admin_create_holiday(
-    request: Request, # <--- AÑADIDO 'request: Request'
-    holiday_date_str: str = Form(...),
-    name: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    """Crea un nuevo feriado."""
+def admin_create_holiday(request: Request, holiday_date_str: str = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
     try:
         holiday_date = datetime.strptime(holiday_date_str, "%Y-%m-%d").date()
     except ValueError:
@@ -64,84 +51,79 @@ def admin_create_holiday(
 
     if not crud.get_holiday_by_date(db, holiday_date):
         crud.create_holiday(db, holiday_date=holiday_date, name=name)
-        
     return RedirectResponse(url=request.url_for("admin_feriados"), status_code=303)
 
 @router.post("/feriados/{holiday_id}/delete", name="admin_delete_holiday")
-def admin_delete_holiday(
-    request: Request, # <--- AÑADIDO 'request: Request'
-    holiday_id: int,
-    db: Session = Depends(get_db)
-):
-    """Elimina un feriado."""
+def admin_delete_holiday(request: Request, holiday_id: int, db: Session = Depends(get_db)):
     crud.delete_holiday(db, holiday_id=holiday_id)
     return RedirectResponse(url=request.url_for("admin_feriados"), status_code=303)
 
-# --- NUEVAS RUTAS DE AJUSTES (PARTE 3) ---
+# --- RUTAS DE AJUSTES Y POLÍTICAS ---
 
 @router.get("/ajustes", response_class=HTMLResponse, name="admin_ajustes")
 def admin_ajustes_page(request: Request, db: Session = Depends(get_db)):
-    """Página para gestionar los ajustes del sistema."""
-    
     settings_db = crud.get_all_settings(db)
-    # Convertir la lista de objetos en un diccionario clave-valor
     settings_dict = {s.key: s.value for s in settings_db}
+    
+    # Obtener políticas para mostrarlas
+    policies = crud.get_all_policies(db)
     
     tmpl = templates.get_template("admin_ajustes.html")
     return tmpl.render({
         "request": request,
-        "settings": settings_dict
+        "settings": settings_dict,
+        "policies": policies
     })
 
 @router.post("/ajustes", name="admin_update_settings")
-async def admin_update_settings(request: Request, db: Session = Depends(get_db)): # <--- ¡¡AQUÍ ESTÁ LA CORRECCIÓN!!
-    """Actualiza los ajustes del sistema."""
+async def admin_update_settings(request: Request, db: Session = Depends(get_db)):
     form_data = await request.form()
-    
-    # Iterar sobre todos los datos del formulario y guardarlos
     for key, value in form_data.items():
         crud.update_or_create_setting(db, key=key, value=value)
-        
     return RedirectResponse(url=request.url_for("admin_ajustes"), status_code=303)
 
-# ... (después de la ruta admin_update_settings)
+# --- RUTAS FALTANTES QUE CAUSABAN EL ERROR ---
 
-# --- NUEVAS RUTAS DE GESTIÓN DE USUARIOS (FASE 5) ---
+@router.post("/ajustes/policy", name="admin_create_policy")
+async def admin_create_policy(
+    request: Request, 
+    name: str = Form(...), 
+    months: list[int] = Form(...), 
+    db: Session = Depends(get_db)
+):
+    crud.create_policy(db, name, months)
+    return RedirectResponse(url=request.url_for("admin_ajustes"), status_code=303)
+
+@router.post("/ajustes/policy/{p_id}/delete", name="admin_delete_policy")
+def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_db)):
+    crud.delete_policy(db, p_id)
+    return RedirectResponse(url=request.url_for("admin_ajustes"), status_code=303)
+
+# ---------------------------------------------
+
+# --- GESTIÓN DE USUARIOS ---
 
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
-def admin_user_list(
-    request: Request, 
-    db: Session = Depends(get_db),
-    success_msg: Optional[str] = None # Para mostrar mensajes de éxito
-):
-    """Muestra la lista de todos los usuarios."""
+def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg: Optional[str] = None):
     users = crud.get_all_users(db)
+    # Ordenar por área para que el template agrupe bien
+    users.sort(key=lambda u: u.area if u.area else "ZZZZ")
+    
     tmpl = templates.get_template("admin_user_list.html")
-    return tmpl.render({
-        "request": request,
-        "users": users,
-        "success_msg": success_msg
-    })
+    return tmpl.render({"request": request, "users": users, "success_msg": success_msg})
 
 @router.get("/users/new", response_class=HTMLResponse, name="admin_user_new")
 def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
-    """Muestra el formulario para crear un nuevo usuario."""
-    managers = crud.get_all_managers(db) # Para el dropdown de "Jefe"
+    managers = crud.get_all_managers(db)
+    policies = crud.get_all_policies(db) # Pasar políticas
     tmpl = templates.get_template("admin_user_form.html")
     return tmpl.render({
-        "request": request,
-        "user": None, # Indica que es un formulario de 'creación'
-        "managers": managers,
-        "action_url": request.url_for("admin_user_create"),
-        "error_msg": None
+        "request": request, "user": None, "managers": managers, "policies": policies,
+        "action_url": request.url_for("admin_user_create"), "error_msg": None
     })
 
 @router.post("/users/new", name="admin_user_create")
-async def admin_user_create(
-    request: Request, 
-    db: Session = Depends(get_db)
-):
-    """Procesa la creación de un nuevo usuario."""
+async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     username = form.get("username")
     password = form.get("password")
@@ -151,82 +133,59 @@ async def admin_user_create(
     area = form.get("area")
     vacation_days_total = int(form.get("vacation_days_total", 30))
     manager_id = int(form.get("manager_id")) if form.get("manager_id") else None
+    vacation_policy_id = int(form.get("vacation_policy_id")) if form.get("vacation_policy_id") else None
 
-    # Validar que el usuario no exista
     if crud.get_user_by_username(db, username):
         managers = crud.get_all_managers(db)
+        policies = crud.get_all_policies(db)
         tmpl = templates.get_template("admin_user_form.html")
         return tmpl.render({
-            "request": request,
-            "user": None,
-            "managers": managers,
+            "request": request, "user": None, "managers": managers, "policies": policies,
             "action_url": request.url_for("admin_user_create"),
             "error_msg": f"El nombre de usuario '{username}' ya existe."
         }, status_code=400)
     
     try:
-        # Usamos SessionLocal para crear el usuario, ya que create_user la cierra
-        # (Esto es por el diseño actual de create_user)
-        db_session = SessionLocal()
-        crud.create_user(
-            username=username,
-            password=password,
-            full_name=full_name,
-            email=email,
-            role=role,
-            area=area,
-            vacation_days_total=vacation_days_total,
-            manager_id=manager_id
+        # Nota: crud.create_user ahora debería aceptar vacation_policy_id.
+        # Si no lo has actualizado en crud.py, actualízalo o pásalo aquí manualmente.
+        # Asumimos que lo añadirás al CRUD, si no, se crea el usuario y luego se actualiza.
+        user = crud.create_user(
+            username=username, password=password, full_name=full_name, email=email,
+            role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id
         )
-        db_session.close()
+        # Actualizar política manualmente si create_user no lo soporta aún
+        if vacation_policy_id:
+            user.vacation_policy_id = vacation_policy_id
+            db.commit()
+
     except ValueError as e:
-        # Error de validación de contraseña
         managers = crud.get_all_managers(db)
+        policies = crud.get_all_policies(db)
         tmpl = templates.get_template("admin_user_form.html")
         return tmpl.render({
-            "request": request,
-            "user": None,
-            "managers": managers,
-            "action_url": request.url_for("admin_user_create"),
-            "error_msg": str(e)
+            "request": request, "user": None, "managers": managers, "policies": policies,
+            "action_url": request.url_for("admin_user_create"), "error_msg": str(e)
         }, status_code=400)
 
-    # Éxito
-    success_url = request.url_for('admin_user_list') + f"?success_msg=Usuario '{username}' creado exitosamente."
-    return RedirectResponse(url=success_url, status_code=303)
-
+    return RedirectResponse(url=request.url_for('admin_user_list') + f"?success_msg=Usuario creado.", status_code=303)
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse, name="admin_user_edit")
-def admin_user_edit_form(
-    request: Request, 
-    user_id: int, 
-    db: Session = Depends(get_db)
-):
-    """Muestra el formulario para editar un usuario existente."""
+def admin_user_edit_form(request: Request, user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not user: raise HTTPException(status_code=404, detail="Usuario no encontrado")
         
     managers = crud.get_all_managers(db)
+    policies = crud.get_all_policies(db)
     tmpl = templates.get_template("admin_user_form.html")
     return tmpl.render({
-        "request": request,
-        "user": user, # Pasa el usuario para rellenar el formulario
-        "managers": managers,
-        "action_url": request.url_for("admin_user_update", user_id=user.id),
-        "error_msg": None
+        "request": request, "user": user, "managers": managers, "policies": policies,
+        "action_url": request.url_for("admin_user_update", user_id=user.id), "error_msg": None
     })
 
 @router.post("/users/{user_id}/edit", name="admin_user_update")
-async def admin_user_update(
-    request: Request, 
-    user_id: int, 
-    db: Session = Depends(get_db)
-):
-    """Procesa la actualización de un usuario."""
+async def admin_user_update(request: Request, user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not user: raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     form = await request.form()
     username = form.get("username")
@@ -236,49 +195,69 @@ async def admin_user_update(
     area = form.get("area")
     vacation_days_total = int(form.get("vacation_days_total", 30))
     manager_id = int(form.get("manager_id")) if form.get("manager_id") else None
+    vacation_policy_id = int(form.get("vacation_policy_id")) if form.get("vacation_policy_id") else None
 
-    # Validar que el nuevo username (si cambió) no esté tomado
     if user.username != username and crud.get_user_by_username(db, username):
         managers = crud.get_all_managers(db)
+        policies = crud.get_all_policies(db)
         tmpl = templates.get_template("admin_user_form.html")
         return tmpl.render({
-            "request": request,
-            "user": user,
-            "managers": managers,
+            "request": request, "user": user, "managers": managers, "policies": policies,
             "action_url": request.url_for("admin_user_update", user_id=user.id),
-            "error_msg": f"El nombre de usuario '{username}' ya existe."
+            "error_msg": f"El usuario '{username}' ya existe."
         }, status_code=400)
 
     crud.admin_update_user(
-        db=db,
-        user=user,
-        username=username,
-        full_name=full_name,
-        email=email,
-        role=role,
-        area=area,
-        vacation_days_total=vacation_days_total,
-        manager_id=manager_id
+        db=db, user=user, username=username, full_name=full_name, email=email,
+        role=role, area=area, vacation_days_total=vacation_days_total,
+        manager_id=manager_id, vacation_policy_id=vacation_policy_id
     )
     
-    success_url = request.url_for('admin_user_list') + f"?success_msg=Usuario '{username}' actualizado."
-    return RedirectResponse(url=success_url, status_code=303)
-
+    return RedirectResponse(url=request.url_for('admin_user_list') + "?success_msg=Actualizado.", status_code=303)
 
 @router.post("/users/{user_id}/reset-password", name="admin_user_reset_password")
-def admin_user_reset_password(
-    request: Request, 
-    user_id: int, 
-    db: Session = Depends(get_db)
-):
-    """Restablece la contraseña de un usuario a 'Temporal123!'."""
+def admin_user_reset_password(request: Request, user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    crud.admin_reset_password(db, user) # Asegúrate de que esta función exista en CRUD
+    return RedirectResponse(url=request.url_for('admin_user_list') + "?success_msg=Password reseteado.", status_code=303)
 
-    crud.admin_reset_password(db, user)
+# --- ORGANIGRAMA ---
+
+@router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
+def admin_org_chart(request: Request, db: Session = Depends(get_db)):
+    """Genera los datos para Google Charts OrgChart"""
+    users = crud.get_all_users(db)
     
-    success_url = request.url_for('admin_user_list') + f"?success_msg=Contraseña de '{user.username}' restablecida a 'Temporal123!'."
-    return RedirectResponse(url=success_url, status_code=303)
+    org_data = []
+    for u in users:
+        # Colores por rol para diferenciar visualmente
+        role_style = "color:black;"
+        if u.role == "manager": role_style = "color:blue; font-weight:bold;"
+        if u.role == "admin": role_style = "color:red; font-weight:bold;"
+        
+        # Nodo HTML enriquecido
+        node_html = f"""
+            <div style="font-family: sans-serif; width: 160px; padding: 5px;">
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">
+                    {u.full_name or u.username}
+                </div>
+                <div style="{role_style} font-size: 12px;">{u.role.upper()}</div>
+                <div style="color: gray; font-size: 11px; font-style: italic;">
+                    {u.area or 'Sin Área'}
+                </div>
+            </div>
+        """
+        
+        node_id = str(u.id)
+        # Google Charts usa string vacío para nodos raíz (sin jefe)
+        parent_id = str(u.manager_id) if u.manager_id else ""
+        tooltip = f"{u.username} - {u.role}"
+        
+        org_data.append([
+            {"v": node_id, "f": node_html}, 
+            parent_id, 
+            tooltip
+        ])
 
-# --- FIN DE NUEVAS RUTAS --- 
+    tmpl = templates.get_template("admin_org_chart.html")
+    return tmpl.render({"request": request, "org_data": org_data})

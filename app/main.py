@@ -1,5 +1,5 @@
 # app/main.py
-# (VERSIÓN PARTE 10)
+# (VERSIÓN ACTUALIZADA CON ASIGNACIÓN POR JEFE)
 
 import os
 from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
@@ -13,17 +13,13 @@ from app.auth import get_current_user, create_access_token, get_current_manager_
 from app.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
-
+from typing import Optional # <-- IMPORTANTE AÑADIR ESTO
 
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 
-# app/main.py
-
-
 def seed_initial_data():
     db = SessionLocal()
-    # Estas dos funciones son correctas y deben quedarse
     crud.seed_holidays(db)
     crud.seed_settings(db)
     db.close()
@@ -43,21 +39,16 @@ os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.state.oauth = oauth
+
+# --- RUTAS DE AUTENTICACIÓN ---
 @app.get("/", response_class=HTMLResponse, name="home")
 def home(request: Request):
     tmpl = templates.get_template("home.html")
     return tmpl.render({"request": request})
 
-# AUTH routes
-# --- RUTAS DE AUTENTICACIÓN (REESCRITAS PARA CAMINO B) ---
-
 @app.get("/login", response_class=HTMLResponse, name="login_page")
 def login_page(request: Request):
-    """
-    Muestra la página de login (que ahora solo tiene un botón).
-    """
     tmpl = templates.get_template("login.html")
-    # Pasamos el dominio para mostrarlo (opcional)
     return tmpl.render({
         "request": request,
         "GOOGLE_LOGIN_DOMAIN": "uandina.edu.pe" 
@@ -65,26 +56,16 @@ def login_page(request: Request):
 
 @app.get("/login/google", name="login_google")
 async def login_google(request: Request):
-    """
-    Paso 1: Redirige al usuario a la página de inicio de sesión de Google.
-    """
-    # Esta es la URL de callback que pusiste en Google Cloud
     redirect_uri = request.url_for('auth_google_callback')
     return await request.app.state.oauth.google.authorize_redirect(request, redirect_uri)
 
 @app.get("/auth/google/callback", name="auth_google_callback")
 async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
-    """
-    Paso 2: Google redirige al usuario de vuelta aquí después del login.
-    """
     try:
-        # Obtenemos el token de Google
         token = await request.app.state.oauth.google.authorize_access_token(request)
     except Exception as e:
-        # El usuario canceló o hubo un error
         return RedirectResponse(url=request.url_for('login_page'))
 
-    # Obtenemos la información del usuario (email, nombre, etc.)
     user_info = token.get('userinfo')
     if not user_info:
         return RedirectResponse(url=request.url_for('login_page'))
@@ -92,23 +73,16 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
     user_email = user_info.get('email')
     user_domain = user_info.get('hd')
 
-    # --- ¡LA VALIDACIÓN MÁS IMPORTANTE! ---
-    # Asegurarnos de que solo entren usuarios de nuestro dominio
     if user_domain != "uandina.edu.pe":
         error_url = str(request.url_for('login_page')) + "?error=domain"
         return RedirectResponse(url=error_url, status_code=302)
 
-    # Verificar si el usuario de Google existe en nuestra BD (cargada del CSV)
     user_in_db = db.query(models.User).filter(models.User.email == user_email).first()
 
     if not user_in_db:
-        # El usuario es de @uandina.edu.pe pero no está en nuestra BD de RRHH.
         error_url = str(request.url_for('login_page')) + "?error=not_found"
         return RedirectResponse(url=error_url, status_code=302)
 
-    # --- ÉXITO ---
-    # El usuario es válido. Creamos nuestro propio token de sesión (JWT)
-    # y lo guardamos en una cookie.
     access_token = create_access_token(data={"sub": user_in_db.email})
 
     response = RedirectResponse(url=request.url_for('dashboard'), status_code=302)
@@ -117,24 +91,12 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/logout", name="logout")
 def logout(request: Request):
-    """
-    Borra nuestra cookie de sesión.
-    """
     response = RedirectResponse(url=request.url_for('home'), status_code=302)
     response.delete_cookie("access_token")
     return response
 
-# --- FIN DE RUTAS DE AUTENTICACIÓN ---
+# --- RUTAS PRINCIPALES ---
 
-# --- AÑADIR ESTAS RUTAS (FASE 4.2) ---
-
-
-# --- FIN DE NUEVAS RUTAS ---
-
-# RUTA DASHBOARD
-@app.get("/app", response_class=HTMLResponse, name="dashboard")
-
-# RUTA DASHBOARD
 @app.get("/app", response_class=HTMLResponse, name="dashboard")
 def dashboard(
     request: Request, 
@@ -157,7 +119,6 @@ def dashboard(
         "error_msg": error_msg 
     })
 
-# Rutas de Creación de Vacaciones
 @app.get("/vacations/new", response_class=HTMLResponse, name="vacation_new_form")
 def new_vacation_form(
     request: Request, 
@@ -166,11 +127,21 @@ def new_vacation_form(
 ):
     remaining_balance = crud.get_user_vacation_balance(db, current)
     
+    # --- LOGICA PARA MOSTRAR EMPLEADOS A JEFES/ADMINS ---
+    employees = []
+    if current.role in ['admin', 'hr']:
+        employees = crud.get_all_users(db)
+    elif current.role == 'manager':
+        # El manager solo ve a sus subordinados
+        employees = current.subordinates 
+    # ----------------------------------------------------
+
     tmpl = templates.get_template("vacation_new.html")
     return tmpl.render({
         "request": request, 
         "user": current,
-        "remaining_balance": remaining_balance 
+        "remaining_balance": remaining_balance,
+        "employees": employees  # Pasamos la lista a la plantilla
     })
 
 @app.post("/vacations", name="vacation_create")
@@ -178,22 +149,55 @@ async def create_vacation(
     request: Request, 
     start_date: str = Form(...), 
     period_type: int = Form(...), 
+    target_user_id: Optional[int] = Form(None), # <-- NUEVO CAMPO OPCIONAL
     file: UploadFile = File(None), 
     current=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     
+    # Por defecto, la vacación es para quien la crea
+    user_to_create_for = current
+
+    # --- LOGICA DE ASIGNACIÓN ---
+    if target_user_id:
+        # Validar permisos
+        if current.role == 'employee':
+             # Un empleado normal no puede asignar a otros
+             error_url = str(request.url_for('dashboard')) + "?error=auth&msg=No tienes permiso para asignar vacaciones a otros."
+             return RedirectResponse(url=error_url, status_code=302)
+        
+        target_user = crud.get_user_by_id(db, target_user_id)
+        if not target_user:
+             error_url = str(request.url_for('dashboard')) + "?error=not_found&msg=Usuario destino no encontrado."
+             return RedirectResponse(url=error_url, status_code=302)
+
+        if current.role == 'manager':
+            # Verificar que el target_user sea realmente subordinado de este manager
+            if target_user.manager_id != current.id:
+                 error_url = str(request.url_for('dashboard')) + "?error=auth&msg=Este usuario no es tu subordinado."
+                 return RedirectResponse(url=error_url, status_code=302)
+        
+        # Si pasa las validaciones, cambiamos el usuario objetivo
+        user_to_create_for = target_user
+    # ----------------------------
+
     file_path_in_db = None
     if file and file.filename: 
         uploads_dir = "uploads"
-        file_path_in_db = f"{current.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+        file_path_in_db = f"{user_to_create_for.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
         file_disk_path = os.path.join(uploads_dir, file_path_in_db)
         
         with open(file_disk_path, "wb") as f:
             f.write(await file.read())
             
     try:
-        vp = crud.create_vacation(db, current, start_date, period_type, file_path_in_db)
+        # Creamos la vacación para 'user_to_create_for'
+        vp = crud.create_vacation(db, user_to_create_for, start_date, period_type, file_path_in_db)
+        
+        # Si fue creada por un jefe para otro, agregamos un log extra para claridad
+        if user_to_create_for.id != current.id:
+            crud.create_vacation_log(db, vp, current, f"Solicitud creada por el jefe/admin: {current.username}")
+
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
     
     except Exception as e:
@@ -207,7 +211,6 @@ async def create_vacation(
         error_url = str(request.url_for('dashboard')) + f"?error={error_type}&msg={error_str}"
         return RedirectResponse(url=error_url, status_code=302)
 
-# Ruta de Modificación (de Parte 6)
 @app.get("/vacation/{vacation_id}/modify", response_class=HTMLResponse, name="vacation_modify_form")
 def modify_vacation_form(
     request: Request,
@@ -230,6 +233,7 @@ def modify_vacation_form(
         "user": current,
         "vacation": vacation
     })
+
 @app.get("/vacation/{vacation_id}/submit-individual", response_class=HTMLResponse, name="vacation_submit_individual_form")
 def submit_individual_form(
     request: Request,
@@ -252,7 +256,7 @@ def submit_individual_form(
         "user": current,
         "vacation": vacation
     })
-# Rutas de Edición (de Parte 8)
+
 @app.get("/vacation/{vacation_id}/edit", response_class=HTMLResponse, name="vacation_edit_form")
 def edit_vacation_form(
     request: Request,
@@ -320,10 +324,6 @@ async def edit_vacation_submit(
         error_url = str(request.url_for('dashboard')) + f"?error={error_type}&msg={error_str}"
         return RedirectResponse(url=error_url, status_code=302)
 
-# Ruta de Detalles (de Parte 9)
-# (Importar models al inicio de app/main.py si no está)
-# from app import crud, models, schemas 
-
 @app.get("/vacation/{vacation_id}/details", response_class=HTMLResponse, name="vacation_details")
 def vacation_details(
     request: Request,
@@ -346,15 +346,12 @@ def vacation_details(
 
     logs = crud.get_logs_for_vacation(db, vacation_id=vacation_id)
 
-    # --- LÍNEAS NUEVAS ---
-    # Buscar archivos de modificación y suspensión asociados
     mod_requests = db.query(models.ModificationRequest).filter(
         models.ModificationRequest.vacation_period_id == vacation_id
     ).all()
     sus_requests = db.query(models.SuspensionRequest).filter(
         models.SuspensionRequest.vacation_period_id == vacation_id
     ).all()
-    # --- FIN DE LÍNEAS NUEVAS ---
 
     tmpl = templates.get_template("vacation_details.html")
     return tmpl.render({
@@ -362,29 +359,24 @@ def vacation_details(
         "user": current,
         "vacation": vacation,
         "logs": logs,
-        "mod_requests": mod_requests, # <-- NUEVO
-        "sus_requests": sus_requests  # <-- NUEVO
+        "mod_requests": mod_requests,
+        "sus_requests": sus_requests
     })
-# --- NUEVA RUTA (PARTE 10) ---
+
 @app.get("/vacation/{vacation_id}/suspend", response_class=HTMLResponse, name="vacation_suspend_form")
 def suspend_vacation_form(
     request: Request,
     vacation_id: int,
-    current=Depends(get_current_manager_user), # Solo managers
+    current=Depends(get_current_manager_user), 
     db: Session = Depends(get_db)
 ):
-    """
-    Muestra el formulario para solicitar la suspensión de una vacación APROBADA.
-    """
     vacation = crud.get_vacation_by_id(db, vacation_id)
 
-    # Validar
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     if vacation.user.area != current.area:
         raise HTTPException(status_code=403, detail="No autorizado")
     if vacation.status != 'approved':
-        # Solo se pueden suspender las aprobadas
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg=Solo se pueden suspender solicitudes APROBADAS."
         return RedirectResponse(url=error_url, status_code=302)
 
@@ -394,8 +386,6 @@ def suspend_vacation_form(
         "user": current,
         "vacation": vacation
     })
-# --- FIN DE NUEVA RUTA ---
-
 
 # ---- INCLUIR ROUTERS ----
 from app.api import api_router

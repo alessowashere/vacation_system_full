@@ -72,10 +72,16 @@
       </div>
 
       <div class="md:col-span-2">
-        <label for="vacation_days_total" class="block text-sm font-medium text-gray-700">Total Días de Vacaciones (por año):</label>
-        <input type="number" name="vacation_days_total" id="vacation_days_total" value="{{ user.vacation_days_total if user else 30 }}" required
-               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-      </div>
+      <label for="vacation_policy_id" class="block text-sm font-medium text-gray-700">Régimen de Vacaciones (Restricciones):</label>
+      <select name="vacation_policy_id" id="vacation_policy_id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+        <option value="">-- Sin Restricciones (General) --</option>
+        {% for p in policies %}
+          <option value="{{ p.id }}" {% if user and user.vacation_policy_id == p.id %}selected{% endif %}>
+            {{ p.name }} (Meses: {{ p.allowed_months }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
 
       {% if not user %}
     <div class="md:col-span-2">

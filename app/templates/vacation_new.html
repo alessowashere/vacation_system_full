@@ -5,15 +5,32 @@
 {% block content %}
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Nueva Solicitud de Vacaciones</h1>
-    <div>
-    <span class="text-sm text-gray-500">Tu Balance Restante:</span>
-    <span class="text-lg font-bold text-green-600 mr-4">{{ remaining_balance }} días</span>
-    <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Dashboard</a>
+    <div class="text-right">
+      <span class="text-sm text-gray-500 block">Tu Balance Propio:</span>
+      <span class="text-lg font-bold text-green-600 block">{{ remaining_balance }} días</span>
+      <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline text-sm">&larr; Volver al Dashboard</a>
+    </div>
   </div>
-</div>
   
   <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto">
     
+    {# --- NUEVO CAMPO: SELECTOR DE EMPLEADO (SOLO SI CORRESPONDE) --- #}
+    {% if employees %}
+    <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+      <label for="target_user_id" class="block text-sm font-bold text-indigo-700 mb-1">Solicitar para:</label>
+      <select name="target_user_id" id="target_user_id" class="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        <option value="">-- Para mí mismo ({{ user.username }}) --</option>
+        {% for emp in employees %}
+          <option value="{{ emp.id }}">
+            {{ emp.full_name or emp.username }} ({{ emp.vacation_days_total }} días totales)
+          </option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-indigo-500 mt-1">Como jefe/admin, puedes crear esta solicitud a nombre de otro empleado.</p>
+    </div>
+    {% endif %}
+    {# -------------------------------------------------------------- #}
+
     <div class="mb-4">
       <label for="start_date" class="block text-sm font-medium text-gray-700">Fecha de Inicio:</label>
       <input type="date" name="start_date" id="start_date" required 
@@ -42,7 +59,7 @@
     </div>
     
     <div class="mb-6">
-      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento (Obligatorio):</label>
+      <label for="file" class="block text-sm font-medium text-gray-700">Adjuntar Documento (Opcional si es borrador):</label>
       <input type="file" name="file" id="file"
              class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
     </div>

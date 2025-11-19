@@ -18,7 +18,15 @@ class User(Base):
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     manager = relationship("User", remote_side=[id], backref="subordinates")
     created_at = Column(DateTime, default=datetime.utcnow)
+    vacation_policy_id = Column(Integer, ForeignKey("vacation_policies.id"), nullable=True)
+    vacation_policy = relationship("VacationPolicy")
 
+class VacationPolicy(Base):
+    __tablename__ = "vacation_policies"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False) # Ej: "Régimen Docente"
+    allowed_months = Column(String(50), nullable=False) # Ej: "1,2,7"
+    
 class Holiday(Base):
     __tablename__ = "holidays"
     id = Column(Integer, primary_key=True)
@@ -104,3 +112,12 @@ class SuspensionRequest(Base):
 
     # Solo para suspensiones parciales
     new_end_date_parcial = Column(Date, nullable=True)
+
+# app/models.py
+# (AÑADIR AL FINAL, ANTES DE LA ULTIMA LÍNEA)
+
+class AreaRestriction(Base):
+    __tablename__ = "area_restrictions"
+    id = Column(Integer, primary_key=True, index=True)
+    area_name = Column(String(100), unique=True, nullable=False) # Ej: "DOCENCIA", "SEGURIDAD"
+    allowed_months = Column(String(50), nullable=False) # Ej: "1,2,7" (Enero, Febrero, Julio)

@@ -35,7 +35,7 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
         <label class="block text-sm font-medium text-gray-500">Empleado</label>
-        <span class="text-lg font-medium text-gray-900">{{ vacation.user.username }}</span>
+        <span class="text-lg font-medium text-gray-900">{{ vacation.user.full_name or vacation.user.username }}</span>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-500">Fechas</label>
@@ -141,7 +141,7 @@
               <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
                 <div>
                   <p class="text-sm text-gray-500">
-                    <span class="font-medium text-gray-900">{{ log.user.username }}</span> ({{ log.user.role }})
+                    <span class="font-medium text-gray-900">{{ log.user.full_name or log.user.username }}</span> ({{ log.user.role }})
                   </p>
                   <p class="text-sm text-gray-700 mt-1">{{ log.log_text }}</p>
                 </div>

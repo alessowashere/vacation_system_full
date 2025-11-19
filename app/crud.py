@@ -608,6 +608,32 @@ def admin_update_user(
     db.refresh(user)
     return user
 
+# app/crud.py
+# (AÑADIR AL FINAL DEL ARCHIVO)
 
+def get_all_area_restrictions(db: Session):
+    return db.query(models.AreaRestriction).all()
+
+def create_area_restriction(db: Session, area_name: str, months: List[int]):
+    # Convertir lista [1, 2] a string "1,2"
+    months_str = ",".join(map(str, months))
+    
+    # Verificar si ya existe y actualizar, o crear nuevo
+    db_obj = db.query(models.AreaRestriction).filter(models.AreaRestriction.area_name == area_name.upper()).first()
+    if db_obj:
+        db_obj.allowed_months = months_str
+    else:
+        db_obj = models.AreaRestriction(area_name=area_name.upper(), allowed_months=months_str)
+        db.add(db_obj)
+    
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+def delete_area_restriction(db: Session, restriction_id: int):
+    db_obj = db.query(models.AreaRestriction).filter(models.AreaRestriction.id == restriction_id).first()
+    if db_obj:
+        db.delete(db_obj)
+        db.commit()
 
 # --- FIN DE NUEVAS FUNCIONES ---

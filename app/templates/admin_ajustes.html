@@ -4,71 +4,70 @@
 
 {% block content %}
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">
-      Ajustes del Sistema
-    </h1>
+    <h1 class="text-2xl font-bold">Ajustes y Políticas</h1>
     <a href="{{ url_for('admin_dashboard') }}" class="text-blue-500 hover:underline">&larr; Volver al Panel</a>
   </div>
 
-  <form action="{{ url_for('admin_update_settings') }}" method="post" class="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
-    <h2 class="text-lg font-semibold mb-6 text-gray-700">Reglas de Cálculo de Vacaciones</h2>
-
-    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
-      <div>
-        <label for="HOLIDAYS_COUNT" class="text-sm font-medium text-gray-900">¿Los feriados cuentan contra el balance?</label>
-        <p class="text-xs text-gray-500">
-          (Recomendado: Sí). Si es "Sí", un feriado consume un día de vacaciones.<br/>
-          Si es "No", los feriados se saltan y no consumen días de balance.
-        </p>
-      </div>
-      <select name="HOLIDAYS_COUNT" id="HOLIDAYS_COUNT" class="rounded-md border-gray-300">
-        <option value="True" {% if settings.HOLIDAYS_COUNT == "True" %}selected{% endif %}>Sí, cuentan</option>
-        <option value="False" {% if settings.HOLIDAYS_COUNT == "False" %}selected{% endif %}>No, no cuentan</option>
-      </select>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    
+    <div class="bg-white shadow rounded-lg p-6 h-fit">
+      <h2 class="text-lg font-bold mb-4 text-gray-700 border-b pb-2">Reglas Globales</h2>
+      <form action="{{ url_for('admin_update_settings') }}" method="post">
+        {% for key, val in settings.items() %}
+        <div class="mb-4">
+           <label class="block text-sm font-medium text-gray-700 mb-1">{{ key }}</label>
+           <select name="{{ key }}" class="w-full rounded-md border-gray-300">
+             <option value="True" {% if val == "True" %}selected{% endif %}>Sí / Permitir</option>
+             <option value="False" {% if val == "False" %}selected{% endif %}>No / Bloquear</option>
+           </select>
+        </div>
+        {% endfor %}
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded">
+          Guardar Globales
+        </button>
+      </form>
     </div>
 
-    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
-      <div>
-        <label for="FRIDAY_EXTENDS" class="text-sm font-medium text-gray-900">¿Extender si el periodo termina en viernes?</label>
-        <p class="text-xs text-gray-500">
-          Si es "Sí", un periodo que termina un viernes se extenderá automáticamente para incluir Sábado y Domingo.
-        </p>
-      </div>
-      <select name="FRIDAY_EXTENDS" id="FRIDAY_EXTENDS" class="rounded-md border-gray-300">
-        <option value="True" {% if settings.FRIDAY_EXTENDS == "True" %}selected{% endif %}>Sí, extender</option>
-        <option value="False" {% if settings.FRIDAY_EXTENDS == "False" %}selected{% endif %}>No, no extender</option>
-      </select>
-    </div>
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-lg font-bold mb-4 text-gray-700 border-b pb-2">Políticas de Restricción (Régimenes)</h2>
+      
+      <form action="{{ url_for('admin_create_policy') }}" method="post" class="mb-6 bg-gray-50 p-4 rounded border">
+          <div class="mb-3">
+              <label class="block text-xs font-bold text-gray-500 uppercase">Nombre del Régimen</label>
+              <input type="text" name="name" placeholder="Ej: Docentes Tiempo Completo" required 
+                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+          </div>
+          
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Meses Permitidos</label>
+          <div class="grid grid-cols-4 gap-2 text-xs">
+              {% set ms = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"] %}
+              {% for i in range(1, 13) %}
+              <label class="inline-flex items-center">
+                  <input type="checkbox" name="months" value="{{ i }}" class="text-blue-600 rounded">
+                  <span class="ml-1">{{ ms[i-1] }}</span>
+              </label>
+              {% endfor %}
+          </div>
+          <button type="submit" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-1 rounded">
+              Crear Política
+          </button>
+      </form>
 
-    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
-      <div>
-        <label for="ALLOW_START_ON_HOLIDAY" class="text-sm font-medium text-gray-900">¿Permitir iniciar vacaciones en un feriado?</label>
-        <p class="text-xs text-gray-500">
-          (Recomendado: No). Bloquea que los usuarios elijan un feriado como fecha de inicio.
-        </p>
-      </div>
-      <select name="ALLOW_START_ON_HOLIDAY" id="ALLOW_START_ON_HOLIDAY" class="rounded-md border-gray-300">
-        <option value="True" {% if settings.ALLOW_START_ON_HOLIDAY == "True" %}selected{% endif %}>Sí, permitir</option>
-        <option value="False" {% if settings.ALLOW_START_ON_HOLIDAY == "False" %}selected{% endif %}>No, bloquear</option>
-      </select>
+      <ul class="space-y-2">
+          {% for p in policies %}
+          <li class="flex justify-between items-center bg-gray-100 p-3 rounded text-sm">
+              <div>
+                  <span class="font-bold block">{{ p.name }}</span>
+                  <span class="text-gray-500 text-xs">Meses: {{ p.allowed_months }}</span>
+              </div>
+              <form action="{{ url_for('admin_delete_policy', p_id=p.id) }}" method="post">
+                  <button class="text-red-500 hover:text-red-700 font-bold px-2">✕</button>
+              </form>
+          </li>
+          {% else %}
+          <li class="text-gray-400 text-sm italic">No hay políticas creadas.</li>
+          {% endfor %}
+      </ul>
     </div>
-
-    <div class="flex items-center justify-between mb-6 p-4 border rounded-lg">
-      <div>
-        <label for="ALLOW_START_ON_WEEKEND" class="text-sm font-medium text-gray-900">¿Permitir iniciar vacaciones en fin de semana?</label>
-        <p class="text-xs text-gray-500">
-          (Recomendado: No). Bloquea que los usuarios elijan Sábado o Domingo como fecha de inicio.
-        </p>
-      </div>
-      <select name="ALLOW_START_ON_WEEKEND" id="ALLOW_START_ON_WEEKEND" class="rounded-md border-gray-300">
-        <option value="True" {% if settings.ALLOW_START_ON_WEEKEND == "True" %}selected{% endif %}>Sí, permitir</option>
-        <option value="False" {% if settings.ALLOW_START_ON_WEEKEND == "False" %}selected{% endif %}>No, bloquear</option>
-      </select>
-    </div>
-
-    <button type="submit" 
-            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-      Guardar Ajustes
-    </button>
-  </form>
+  </div>
 {% endblock %}
