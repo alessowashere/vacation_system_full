@@ -35,7 +35,6 @@ services:
       MYSQL_DATABASE: vacation_system
       MYSQL_USER: admin
       MYSQL_PASSWORD: Redlabel@
-    command: --default-authentication-plugin=mysql_native_password
     volumes:
       - vacation_mysql_data:/var/lib/mysql
     healthcheck:
