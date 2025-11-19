@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 # --- CONFIGURACIÓN ---
 ADMIN_EMAIL = 'afernandezl@uandina.edu.pe'
 HR_EMAIL = 'rhumanos@uandina.edu.pe'
-CSV_FILENAME = "usuarios.csv"  # Tu archivo de 4 columnas
+CSV_FILENAME = "usuarios.csv"
 
 def import_data():
-    print("🚀 INICIANDO CARGA (FORMATO SIMPLIFICADO 4 COLUMNAS)...")
+    print("🚀 INICIANDO CARGA (CON NOMBRES DE JEFES)...")
     db: Session = SessionLocal()
 
     try:
@@ -35,7 +35,7 @@ def import_data():
         relationships = []
 
         with open(csv_path, mode='r', encoding='utf-8-sig') as f:
-            # Detectar si usa ; o ,
+            # Detectar delimitador automáticamente (; o ,)
             line = f.readline()
             delimiter = ';' if ';' in line else ','
             f.seek(0)
@@ -43,45 +43,56 @@ def import_data():
             reader = csv.DictReader(f, delimiter=delimiter)
             
             for row in reader:
-                # Limpieza de datos
+                # Limpieza de datos del empleado
                 email = row.get("CORREO", "").strip().lower()
                 name = row.get("NOMBRES", "").strip()
                 area = row.get("AREA", "").strip()
+                
+                # Limpieza de datos del jefe
                 boss_email = row.get("CORREO_JEFE", "").strip().lower()
+                boss_name = row.get("NOMBRE_JEFE", "").strip() # <--- CAPTURAR NOMBRE DEL JEFE
 
                 if not email or "@" not in email: continue
 
-                # Guardar Empleado
+                # Guardar Empleado Principal
+                # (Si ya existe, se actualiza con los datos de esta fila)
                 users_to_create[email] = {
                     "username": email.split('@')[0],
                     "full_name": name,
                     "email": email,
-                    "role": "employee",
+                    "role": "employee", # Se ajustará a manager más abajo si corresponde
                     "area": area
                 }
                 
-                # Guardar relación para después
+                # Procesar Jefe
                 if boss_email and "@" in boss_email:
                     relationships.append((email, boss_email))
                     
-                    # --- LA PARTE CLAVE: AUTO-CREAR JEFE FALTANTE ---
+                    # Si el jefe NO está en la lista de usuarios aún, lo creamos (Fantasma)
                     if boss_email not in users_to_create:
-                        # Como NO tenemos el nombre del jefe en el CSV,
-                        # creamos uno genérico usando su correo.
-                        print(f"   ✨ Creando jefe fantasma: {boss_email}")
+                        
+                        # Usar el nombre del CSV si existe, sino uno genérico
+                        final_boss_name = boss_name if boss_name else f"Jefe ({boss_email.split('@')[0]})"
+                        
+                        print(f"   ✨ Creando jefe fantasma: {boss_email} -> {final_boss_name}")
                         
                         users_to_create[boss_email] = {
                             "username": boss_email.split('@')[0],
-                            "full_name": f"Jefe ({boss_email.split('@')[0]})", # Nombre generado
+                            "full_name": final_boss_name, # <--- AQUI USAMOS EL NOMBRE REAL
                             "email": boss_email,
                             "role": "manager",
                             "area": area # Asumimos el área del subordinado
                         }
+                    
+                    # Si el jefe YA existe (porque se cargó como empleado antes o después), 
+                    # nos aseguramos de que tenga el rol de manager.
+                    elif users_to_create[boss_email]["role"] == "employee":
+                        users_to_create[boss_email]["role"] = "manager"
 
         # 3. INSERCIÓN
         print(f"\n[3/4] Insertando {len(users_to_create)} usuarios...")
         
-        # Roles especiales
+        # Asignar Roles Especiales (Admin / HR)
         if ADMIN_EMAIL in users_to_create: users_to_create[ADMIN_EMAIL]["role"] = "admin"
         if HR_EMAIL in users_to_create: users_to_create[HR_EMAIL]["role"] = "hr"
 
@@ -118,13 +129,13 @@ def import_data():
         print(f"✅ {links} vínculos creados exitosamente.")
 
     except FileNotFoundError:
-        print(f"❌ ERROR: No encuentro '{CSV_FILENAME}'")
+        print(f"❌ ERROR: No encuentro '{CSV_FILENAME}' en la carpeta.")
     except Exception as e:
         print(f"❌ ERROR: {str(e)}")
         db.rollback()
     finally:
         db.close()
-        print("\n✨ LISTO ✨")
+        print("\n✨ CARGA COMPLETA ✨")
 
 if __name__ == "__main__":
     import_data()

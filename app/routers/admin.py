@@ -82,8 +82,6 @@ async def admin_update_settings(request: Request, db: Session = Depends(get_db))
         crud.update_or_create_setting(db, key=key, value=value)
     return RedirectResponse(url=request.url_for("admin_ajustes"), status_code=303)
 
-# --- RUTAS FALTANTES QUE CAUSABAN EL ERROR ---
-
 @router.post("/ajustes/policy", name="admin_create_policy")
 async def admin_create_policy(
     request: Request, 
@@ -99,8 +97,6 @@ def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_d
     crud.delete_policy(db, p_id)
     return RedirectResponse(url=request.url_for("admin_ajustes"), status_code=303)
 
-# ---------------------------------------------
-
 # --- GESTIÓN DE USUARIOS ---
 
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
@@ -115,7 +111,7 @@ def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg
 @router.get("/users/new", response_class=HTMLResponse, name="admin_user_new")
 def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
     managers = crud.get_all_managers(db)
-    policies = crud.get_all_policies(db) # Pasar políticas
+    policies = crud.get_all_policies(db)
     tmpl = templates.get_template("admin_user_form.html")
     return tmpl.render({
         "request": request, "user": None, "managers": managers, "policies": policies,
@@ -146,9 +142,6 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
         }, status_code=400)
     
     try:
-        # Nota: crud.create_user ahora debería aceptar vacation_policy_id.
-        # Si no lo has actualizado en crud.py, actualízalo o pásalo aquí manualmente.
-        # Asumimos que lo añadirás al CRUD, si no, se crea el usuario y luego se actualiza.
         user = crud.create_user(
             username=username, password=password, full_name=full_name, email=email,
             role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id
@@ -167,7 +160,8 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
             "action_url": request.url_for("admin_user_create"), "error_msg": str(e)
         }, status_code=400)
 
-    return RedirectResponse(url=request.url_for('admin_user_list') + f"?success_msg=Usuario creado.", status_code=303)
+    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
+    return RedirectResponse(url=str(request.url_for('admin_user_list')) + f"?success_msg=Usuario creado.", status_code=303)
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse, name="admin_user_edit")
 def admin_user_edit_form(request: Request, user_id: int, db: Session = Depends(get_db)):
@@ -213,13 +207,15 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
         manager_id=manager_id, vacation_policy_id=vacation_policy_id
     )
     
-    return RedirectResponse(url=request.url_for('admin_user_list') + "?success_msg=Actualizado.", status_code=303)
+    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
+    return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Actualizado.", status_code=303)
 
 @router.post("/users/{user_id}/reset-password", name="admin_user_reset_password")
 def admin_user_reset_password(request: Request, user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user_by_id(db, user_id)
-    crud.admin_reset_password(db, user) # Asegúrate de que esta función exista en CRUD
-    return RedirectResponse(url=request.url_for('admin_user_list') + "?success_msg=Password reseteado.", status_code=303)
+    crud.admin_reset_password(db, user)
+    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
+    return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Password reseteado.", status_code=303)
 
 # --- ORGANIGRAMA ---
 

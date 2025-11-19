@@ -4,9 +4,43 @@
 
 {% block content %}
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+<div class="flex flex-col h-screen max-h-[80vh]">
+  
+  <div class="flex justify-between items-center mb-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Organigrama</h1>
+      <p class="text-xs text-gray-500">Doble clic para colapsar/expandir nodos.</p>
+    </div>
+    
+    <div class="flex items-center space-x-2">
+      <button onclick="adjustZoom(0.1)" class="p-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 font-bold" title="Acercar">
+        +
+      </button>
+      <button onclick="adjustZoom(-0.1)" class="p-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 font-bold" title="Alejar">
+        -
+      </button>
+      <button onclick="resetZoom()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 text-sm" title="Restaurar">
+        Reset
+      </button>
+      <div class="h-6 w-px bg-gray-300 mx-2"></div>
+      <a href="{{ url_for('admin_user_list') }}" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+        &larr; Volver
+      </a>
+    </div>
+  </div>
+
+  <div id="chart_container" class="flex-1 bg-gray-50 rounded-lg border border-gray-300 overflow-auto relative cursor-grab active:cursor-grabbing">
+    <div id="chart_div" class="p-10 origin-top-left transition-transform duration-200"></div>
+  </div>
+
+</div>
+
 <script type="text/javascript">
   google.charts.load('current', {packages:["orgchart"]});
   google.charts.setOnLoadCallback(drawChart);
+
+  var currentZoom = 1.0;
 
   function drawChart() {
     var data = new google.visualization.DataTable();
@@ -14,40 +48,114 @@
     data.addColumn('string', 'Manager');
     data.addColumn('string', 'ToolTip');
 
-    // Insertar datos desde Python (Jinja2 renderizará esto como una lista JS válida)
+    // Datos desde Python
     var chartData = {{ org_data|tojson }};
-    
-    // Convertir los diccionarios de vuelta a objetos JS si es necesario, 
-    // pero tojson suele manejarlo bien. Google espera filas.
     data.addRows(chartData);
 
     var chart = new google.visualization.OrgChart(document.getElementById('chart_div'));
     
-    // Opciones de diseño
-    chart.draw(data, {'allowHtml':true, 'size': 'medium', 'nodeClass': 'org-node'});
+    chart.draw(data, {
+        'allowHtml': true,
+        'allowCollapse': true,
+        'size': 'medium',
+        'nodeClass': 'org-node shadow-md',
+        'selectedNodeClass': 'org-node-selected ring-2 ring-blue-500'
+    });
+
+    // Habilitar Arrastrar (Pan)
+    setupDrag();
+  }
+
+  // --- Funciones de Zoom ---
+  function adjustZoom(delta) {
+    currentZoom += delta;
+    if (currentZoom < 0.2) currentZoom = 0.2; // Mínimo zoom
+    if (currentZoom > 3.0) currentZoom = 3.0; // Máximo zoom
+    applyZoom();
+  }
+
+  function resetZoom() {
+    currentZoom = 1.0;
+    // Centrar scroll
+    const container = document.getElementById('chart_container');
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
+    applyZoom();
+  }
+
+  function applyZoom() {
+    const chartDiv = document.getElementById('chart_div');
+    chartDiv.style.transform = `scale(${currentZoom})`;
+    
+    // Ajustar el margen para que al hacer zoom out no quede espacio vacío extraño
+    // (Opcional, depende del gusto)
+    if(currentZoom < 1) {
+        chartDiv.style.width = `${100/currentZoom}%`;
+    } else {
+        chartDiv.style.width = 'auto';
+    }
+  }
+
+  // --- Función de Arrastrar (Drag / Pan) ---
+  function setupDrag() {
+    const container = document.getElementById('chart_container');
+    let isDown = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    container.addEventListener('mousedown', (e) => {
+      isDown = true;
+      container.classList.add('active');
+      startX = e.pageX - container.offsetLeft;
+      startY = e.pageY - container.offsetTop;
+      scrollLeft = container.scrollLeft;
+      scrollTop = container.scrollTop;
+    });
+
+    container.addEventListener('mouseleave', () => {
+      isDown = false;
+      container.classList.remove('active');
+    });
+
+    container.addEventListener('mouseup', () => {
+      isDown = false;
+      container.classList.remove('active');
+    });
+
+    container.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - container.offsetLeft;
+      const y = e.pageY - container.offsetTop;
+      const walkX = (x - startX) * 1.5; // Velocidad de arrastre
+      const walkY = (y - startY) * 1.5;
+      container.scrollLeft = scrollLeft - walkX;
+      container.scrollTop = scrollTop - walkY;
+    });
   }
 </script>
 
 <style>
-  /* Estilo suave para los nodos */
+  /* Estilos mejorados para los nodos */
   .org-node {
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: white !important;
+      border: 1px solid #e5e7eb !important; /* gray-200 */
+      border-left: 4px solid #3b82f6 !important; /* borde azul a la izquierda */
+      border-radius: 6px !important;
+      padding: 0 !important;
+      font-family: inherit;
   }
-  /* Quitar el azul de selección por defecto de Google */
+
+  /* Quitar líneas azules feas de selección por defecto */
   .google-visualization-orgchart-node-medium {
-      border: none;
+    border: none !important;
+  }
+
+  /* Mejorar líneas conectoras */
+  .google-visualization-orgchart-lineleft, 
+  .google-visualization-orgchart-lineright, 
+  .google-visualization-orgchart-linebottom {
+    border-color: #9ca3af !important; /* gray-400 */
+    border-width: 2px !important;
   }
 </style>
-
-<div class="flex justify-between items-center mb-6">
-  <h1 class="text-2xl font-bold">Organigrama Institucional</h1>
-  <a href="{{ url_for('admin_user_list') }}" class="text-blue-500 hover:underline">&larr; Volver a Lista</a>
-</div>
-
-<div class="overflow-x-auto bg-gray-50 p-8 rounded-lg border border-gray-200">
-  <div id="chart_div"></div>
-</div>
 {% endblock %}

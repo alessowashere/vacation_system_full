@@ -593,7 +593,8 @@ def admin_update_user(
     role: str, 
     area: str, 
     vacation_days_total: int, 
-    manager_id: int
+    manager_id: int,
+    vacation_policy_id: int = None  # <--- NUEVO PARÁMETRO
 ):
     """Actualiza los detalles de un usuario desde el panel de admin."""
     user.username = username
@@ -603,6 +604,7 @@ def admin_update_user(
     user.area = area
     user.vacation_days_total = vacation_days_total
     user.manager_id = manager_id if manager_id else None
+    user.vacation_policy_id = vacation_policy_id if vacation_policy_id else None # <--- ACTUALIZACIÓN
     
     db.commit()
     db.refresh(user)
@@ -635,5 +637,28 @@ def delete_area_restriction(db: Session, restriction_id: int):
     if db_obj:
         db.delete(db_obj)
         db.commit()
+# --- GESTIÓN DE POLÍTICAS DE VACACIONES (VACATION POLICIES) ---
 
+def get_all_policies(db: Session):
+    """Obtiene todas las políticas de vacaciones configuradas."""
+    return db.query(models.VacationPolicy).all()
+
+def create_policy(db: Session, name: str, months: List[int]):
+    """Crea una nueva política. 'months' es una lista de enteros (ej: [1, 2, 7])."""
+    # Convertir la lista de enteros a una cadena separada por comas "1,2,7"
+    months_str = ",".join(map(str, months))
+    
+    policy = models.VacationPolicy(name=name, allowed_months=months_str)
+    db.add(policy)
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+def delete_policy(db: Session, policy_id: int):
+    """Elimina una política por su ID."""
+    policy = db.query(models.VacationPolicy).filter(models.VacationPolicy.id == policy_id).first()
+    if policy:
+        db.delete(policy)
+        db.commit()
+    return policy
 # --- FIN DE NUEVAS FUNCIONES ---
