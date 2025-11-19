@@ -26,29 +26,24 @@ def get_user_by_username(db, username):
 
 
 
-def create_user(username, password, role="employee", full_name=None, email=None, area=None, vacation_days_total=30, manager_id=None):
-    
-    # --- MODIFICACIÓN FASE 5.1 ---
-    # Ahora la validación SÍ lanza un error,
-    # --- FIN DE LA MODIFICACIÓN ---
-
+def create_user(username, role="employee", full_name=None, email=None, area=None, vacation_days_total=30, manager_id=None):
     db = SessionLocal()
-    hashed = pwd_context.hash(password)
-    # El 'force_password_change' se quedará en True por defecto
+    # YA NO HASHEAMOS NADA
     u = models.User(
         username=username, 
-        password_hash=hashed, 
+        # password_hash=hashed,  <-- ELIMINAR ESTA LÍNEA
         role=role, 
         full_name=full_name, 
         email=email, 
         area=area,
-        vacation_days_total=vacation_days_total, # <-- NUEVO
-        manager_id=manager_id # <-- NUEVO
+        vacation_days_total=vacation_days_total,
+        manager_id=manager_id
     )
     db.add(u)
     db.commit()
     db.refresh(u)
     db.close()
+    return u
     return u
 
 # --- MODIFICAR get_user_vacation_balance (FASE 5.3) ---

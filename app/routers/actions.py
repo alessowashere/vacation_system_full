@@ -64,8 +64,11 @@ async def submit_individual_vacation(
     """
     vacation = crud.get_vacation_by_id(db, vacation_id)
     # Validar que la vacación exista y pertenezca al área del jefe actual
-    if not vacation or vacation.user.area != current.area:
-        raise HTTPException(status_code=403, detail="No autorizado o solicitud no encontrada")
+    if not vacation:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
+        raise HTTPException(status_code=403, detail="No autorizado: No es tu subordinado")
 
     # Validar archivo
     if not file or not file.filename:
@@ -102,6 +105,10 @@ async def submit_individual_vacation(
 
 
 
+# app/routers/actions.py
+
+# ... (imports)
+
 @router.post("/vacation/{vacation_id}/approve", name="action_approve_vacation")
 async def approve_vacation(
     request: Request,
@@ -119,7 +126,6 @@ async def approve_vacation(
     crud.update_vacation_status(db, vacation=vacation, new_status="approved", actor=current)
     
     # --- NOTIFICACIÓN AL EMPLEADO ---
-    # Enviamos el correo ANTES de retornar la respuesta
     if vacation.user.email:
         formatted_start = vacation.start_date.strftime('%d/%m/%Y')
         formatted_end = vacation.end_date.strftime('%d/%m/%Y')
@@ -135,7 +141,9 @@ async def approve_vacation(
                 <hr>
                 <p><b>📅 Desde:</b> {formatted_start}</p>
                 <p><b>📅 Hasta:</b> {formatted_end}</p>
-                <p><b>🗓️ Días:</b> {vacation.days_count}</p>
+                
+                <p><b>🗓️ Días:</b> {vacation.days}</p> 
+                
                 <hr>
                 <p>Disfruta de tu descanso.</p>
                 <p style="font-size: 12px; color: #777;">Sistema de Gestión de Vacaciones - UAndina</p>
@@ -192,8 +200,13 @@ async def request_modification(
     db: Session = Depends(get_db)
 ):
     vacation = crud.get_vacation_by_id(db, vacation_id)
-    if not vacation or vacation.user.area != current.area:
+    if not vacation:
+        raise HTTPException(status_code=404)
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado")
+    
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
+        raise HTTPException(status_code=403, detail="No autorizado: No es tu subordinado")
 
     uploads_dir = "uploads"
     file_name = f"MODIFICACION_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
@@ -255,7 +268,7 @@ def add_comment(
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
         
-    if current.role == 'manager' and current.area != vacation.user.area:
+    if current.role == 'manager' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado")
 
     crud.create_vacation_log(db, vacation=vacation, user=current, log_text=log_text)
@@ -282,7 +295,9 @@ async def request_suspension(
     Recibe el formulario de solicitud de suspensión del jefe.
     """
     vacation = crud.get_vacation_by_id(db, vacation_id)
-    if not vacation or vacation.user.area != current.area:
+    if not vacation: 
+        raise HTTPException(status_code=404)
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado")
 
     uploads_dir = "uploads"

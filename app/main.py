@@ -222,8 +222,14 @@ def modify_vacation_form(
 
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    if vacation.user.area != current.area:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    
+    # --- CORRECCIÓN AQUÍ ---
+    # Antes: if vacation.user.area != current.area:
+    # Ahora verificamos si es Admin O si es el Jefe directo
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
+        raise HTTPException(status_code=403, detail="No autorizado: No eres el jefe directo de este usuario.")
+    # -----------------------
+
     if vacation.status != 'rejected':
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
 
@@ -245,8 +251,12 @@ def submit_individual_form(
 
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    if vacation.user.area != current.area:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    
+    # --- CORRECCIÓN AQUÍ ---
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
+        raise HTTPException(status_code=403, detail="No autorizado: No eres el jefe directo.")
+    # -----------------------
+
     if vacation.status != 'draft':
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
 
@@ -338,7 +348,7 @@ def vacation_details(
 
     can_view = False
     if current.role in ['admin', 'hr']: can_view = True
-    elif current.role == 'manager' and current.area == vacation.user.area: can_view = True
+    elif current.role == 'manager' and vacation.user.manager_id == current.id: can_view = True
     elif current.id == vacation.user_id: can_view = True
 
     if not can_view:
@@ -374,8 +384,12 @@ def suspend_vacation_form(
 
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    if vacation.user.area != current.area:
+    
+    # --- CORRECCIÓN AQUÍ ---
+    if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado")
+    # -----------------------
+
     if vacation.status != 'approved':
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg=Solo se pueden suspender solicitudes APROBADAS."
         return RedirectResponse(url=error_url, status_code=302)

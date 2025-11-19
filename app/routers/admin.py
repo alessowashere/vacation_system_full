@@ -122,7 +122,7 @@ def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
 async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     username = form.get("username")
-    password = form.get("password")
+    # password = form.get("password") <--- ELIMINAR
     full_name = form.get("full_name")
     email = form.get("email")
     role = form.get("role")
@@ -143,7 +143,7 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     
     try:
         user = crud.create_user(
-            username=username, password=password, full_name=full_name, email=email,
+            username=username, full_name=full_name, email=email,
             role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id
         )
         # Actualizar política manualmente si create_user no lo soporta aún
