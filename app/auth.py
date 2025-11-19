@@ -46,7 +46,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     3. Busca al usuario en la BD por el email/ID guardado en el token.
     """
     token = request.cookies.get("access_token")
-    login_url = request.url_for('login_page')
+    login_url = request.url_for('login_page').__str__()
     
     if not token:
         raise HTTPException(status_code=302, detail="No autenticado", headers={"Location": login_url})
@@ -55,12 +55,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_email = payload.get("sub") # Estamos guardando el email en 'sub'
         if user_email is None:
-            raise HTTPException(status_code=302, detail="Token inválido", headers={"Location": login_url})
+            raise HTTPException(status_code=302, detail="Token inválido", headers={"Location": str(login_url)})
     
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=302, detail="Sesión expirada", headers={"Location": login_url})
+        raise HTTPException(status_code=302, detail="Sesión expirada", headers={"Location": str(login_url)})
     except Exception as e:
-        raise HTTPException(status_code=302, detail="Token inválido", headers={"Location": login_url})
+        raise HTTPException(status_code=302, detail="Token inválido", headers={"Location": str(login_url)})
 
     # Busca al usuario en nuestra BD usando el email validado por Google
     user = db.query(models.User).filter(models.User.email == user_email).first()

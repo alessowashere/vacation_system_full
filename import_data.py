@@ -1,136 +1,130 @@
 import os
 import csv
 from app import models
-from app.db import SessionLocal, Base, engine
+from app.db import SessionLocal
 from sqlalchemy.orm import Session
 
-# --- PASO 1: CONFIGURAR LOS CORREOS ---
+# --- CONFIGURACIÓN ---
 ADMIN_EMAIL = 'afernandezl@uandina.edu.pe'
 HR_EMAIL = 'rhumanos@uandina.edu.pe'
-# ----------------------------------------
-
-CSV_FILENAME = "BD PARA SISTEMA - ROL ANUAL - PARA SUBIR BD 2026.csv"
+CSV_FILENAME = "usuarios.csv"  # Tu archivo de 4 columnas
 
 def import_data():
-    print("Iniciando la importación de datos...")
+    print("🚀 INICIANDO CARGA (FORMATO SIMPLIFICADO 4 COLUMNAS)...")
     db: Session = SessionLocal()
 
     try:
-        # --- Limpiar todas las tablas ---
-        print("Limpiando datos antiguos...")
+        # 1. LIMPIEZA
+        print("\n[1/4] Limpiando base de datos...")
         db.query(models.VacationLog).delete()
         db.query(models.SuspensionRequest).delete()
         db.query(models.ModificationRequest).delete()
         db.query(models.VacationPeriod).delete()
-        
-        # --- ¡¡SOLUCIÓN AL ERROR!! ---
-        # 1. Romper la dependencia circular (jefes)
-        print("  > Rompiendo vínculos de managers existentes...")
         db.query(models.User).update({models.User.manager_id: None})
         db.commit()
-        # --- FIN DE LA SOLUCIÓN ---
-
-        # 2. Ahora sí podemos borrar a los usuarios
         db.query(models.User).delete()
         db.commit()
-        print("Datos antiguos eliminados.")
+        print("✅ Base de datos limpia.")
 
-        # --- PASS 1: Leer CSV y crear todos los usuarios ---
-        print(f"PASS 1: Leyendo {CSV_FILENAME} y creando usuarios...")
-        
+        # 2. LECTURA
+        print("\n[2/4] Leyendo archivo...")
         script_dir = os.path.dirname(__file__)
         csv_path = os.path.join(script_dir, CSV_FILENAME)
 
-        all_user_data = []
+        users_to_create = {}
+        relationships = []
+
         with open(csv_path, mode='r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            all_user_data = list(reader)
+            # Detectar si usa ; o ,
+            line = f.readline()
+            delimiter = ';' if ';' in line else ','
+            f.seek(0)
+            
+            reader = csv.DictReader(f, delimiter=delimiter)
+            
+            for row in reader:
+                # Limpieza de datos
+                email = row.get("CORREO", "").strip().lower()
+                name = row.get("NOMBRES", "").strip()
+                area = row.get("AREA", "").strip()
+                boss_email = row.get("CORREO_JEFE", "").strip().lower()
 
-        email_to_boss_email_map = {}
-        all_boss_emails = set()
+                if not email or "@" not in email: continue
+
+                # Guardar Empleado
+                users_to_create[email] = {
+                    "username": email.split('@')[0],
+                    "full_name": name,
+                    "email": email,
+                    "role": "employee",
+                    "area": area
+                }
+                
+                # Guardar relación para después
+                if boss_email and "@" in boss_email:
+                    relationships.append((email, boss_email))
+                    
+                    # --- LA PARTE CLAVE: AUTO-CREAR JEFE FALTANTE ---
+                    if boss_email not in users_to_create:
+                        # Como NO tenemos el nombre del jefe en el CSV,
+                        # creamos uno genérico usando su correo.
+                        print(f"   ✨ Creando jefe fantasma: {boss_email}")
+                        
+                        users_to_create[boss_email] = {
+                            "username": boss_email.split('@')[0],
+                            "full_name": f"Jefe ({boss_email.split('@')[0]})", # Nombre generado
+                            "email": boss_email,
+                            "role": "manager",
+                            "area": area # Asumimos el área del subordinado
+                        }
+
+        # 3. INSERCIÓN
+        print(f"\n[3/4] Insertando {len(users_to_create)} usuarios...")
         
-        for row in all_user_data:
-            # Limpieza de email (para corregir el "afernandez,l@...")
-            email = row["CORREO_EMP"].strip().lower().replace('"', '').replace(',', '')
-            
-            if not email or '@' not in email:
-                print(f"  > Saltando fila inválida (sin email): {row['APELLIDOS Y NOMBRES']}")
-                continue
+        # Roles especiales
+        if ADMIN_EMAIL in users_to_create: users_to_create[ADMIN_EMAIL]["role"] = "admin"
+        if HR_EMAIL in users_to_create: users_to_create[HR_EMAIL]["role"] = "hr"
 
-            username = email.split('@')[0]
-
-            # Determinar el rol
-            role = 'employee' # Por defecto
-            if email == ADMIN_EMAIL:
-                role = 'admin'
-            elif email == HR_EMAIL:
-                role = 'hr'
-            
-            new_user = models.User(
-                username=username,
-                full_name=row["APELLIDOS Y NOMBRES"].strip(),
-                email=email,
-                role=role,
-                area=row["DEPENDENCIA"].strip(),
-                vacation_days_total=30 
+        db_objects = []
+        for data in users_to_create.values():
+            u = models.User(
+                username=data["username"],
+                full_name=data["full_name"],
+                email=data["email"],
+                role=data["role"],
+                area=data["area"],
+                vacation_days_total=30
             )
-            db.add(new_user)
-            
-            # Guardar datos para pases futuros
-            boss_email = row["CORREO JEFE"].strip().lower()
-            if boss_email and boss_email != '-':
-                email_to_boss_email_map[email] = boss_email
-                all_boss_emails.add(boss_email)
+            db_objects.append(u)
+        
+        db.add_all(db_objects)
+        db.commit()
+        print("✅ Usuarios creados.")
 
-        db.commit()
-        print(f"  > {len(all_user_data)} usuarios creados en la BD.")
-
-        # --- PASS 2: Asignar roles de 'manager' ---
-        print("PASS 2: Asignando roles de 'manager'...")
+        # 4. VINCULACIÓN
+        print("\n[4/4] Conectando jerarquías...")
+        email_to_id = {u.email: u.id for u in db.query(models.User).all()}
         
-        # Obtener todos los usuarios que acabamos de crear
-        users_in_db = db.query(models.User).all()
-        user_map_by_email = {u.email: u for u in users_in_db}
-        
-        managers_assigned = 0
-        for email in all_boss_emails:
-            if email in user_map_by_email:
-                user = user_map_by_email[email]
-                if user.role == 'employee': # Solo ascender si es 'employee'
-                    user.role = 'manager'
-                    managers_assigned += 1
-            else:
-                print(f"  > Advertencia (Rol Manager): El jefe '{email}' no se encuentra en la lista de usuarios.")
-        
-        db.commit()
-        print(f"  > {managers_assigned} usuarios ascendidos a 'manager'.")
-        
-        # --- PASS 3: Vincular empleados con sus jefes ---
-        print("PASS 3: Vinculando empleados con sus jefes...")
-        
-        links_made = 0
-        for email, boss_email in email_to_boss_email_map.items():
-            employee = user_map_by_email.get(email)
-            manager = user_map_by_email.get(boss_email)
+        links = 0
+        for emp_email, boss_email in relationships:
+            emp_id = email_to_id.get(emp_email)
+            boss_id = email_to_id.get(boss_email)
             
-            if employee and manager:
-                employee.manager_id = manager.id
-                links_made += 1
-            elif employee and not manager:
-                # Esta advertencia SÍ es normal, si el jefe no está en la lista
-                print(f"  > Advertencia (Vínculo): El jefe '{boss_email}' del empleado '{email}' no existe. No se pudo vincular.")
-            
+            if emp_id and boss_id:
+                db.query(models.User).filter(models.User.id == emp_id).update({"manager_id": boss_id})
+                links += 1
+        
         db.commit()
-        print(f"  > {links_made} vinculaciones de jefe-empleado realizadas.")
+        print(f"✅ {links} vínculos creados exitosamente.")
 
     except FileNotFoundError:
-        print(f"ERROR: No se encontró el archivo '{CSV_FILENAME}'.")
+        print(f"❌ ERROR: No encuentro '{CSV_FILENAME}'")
     except Exception as e:
+        print(f"❌ ERROR: {str(e)}")
         db.rollback()
-        print(f"ERROR: Ocurrió un error. Revirtiendo cambios: {str(e)}")
     finally:
         db.close()
-        print("Importación finalizada. Conexión cerrada.")
+        print("\n✨ LISTO ✨")
 
 if __name__ == "__main__":
     import_data()

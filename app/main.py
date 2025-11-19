@@ -112,7 +112,7 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": user_in_db.email})
 
     response = RedirectResponse(url=request.url_for('dashboard'), status_code=302)
-    response.set_cookie("access_token", access_token, httponly=True, secure=True, samesite="lax")
+    response.set_cookie("access_token", access_token, httponly=True, secure=False, samesite="lax")
     return response
 
 @app.get("/logout", name="logout")
