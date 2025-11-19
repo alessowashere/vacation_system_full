@@ -20,6 +20,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     vacation_policy_id = Column(Integer, ForeignKey("vacation_policies.id"), nullable=True)
     vacation_policy = relationship("VacationPolicy")
+    location = Column(String(50), default="CUSCO")
 
 class VacationPolicy(Base):
     __tablename__ = "vacation_policies"
@@ -30,9 +31,12 @@ class VacationPolicy(Base):
 class Holiday(Base):
     __tablename__ = "holidays"
     id = Column(Integer, primary_key=True)
-    holiday_date = Column(Date, nullable=False, unique=True)
+    # ELIMINAR unique=True de holiday_date, porque dos sedes pueden tener feriado el mismo día con distinto nombre
+    holiday_date = Column(Date, nullable=False) 
     name = Column(String(200))
     is_national = Column(Boolean, default=True)
+    # NUEVA COLUMNA:
+    location = Column(String(50), default="GENERAL")
 
 class VacationPeriod(Base):
     __tablename__ = "vacation_periods"

@@ -26,24 +26,31 @@ def get_user_by_username(db, username):
 
 
 
-def create_user(username, role="employee", full_name=None, email=None, area=None, vacation_days_total=30, manager_id=None):
+def create_user(
+    username, 
+    role="employee", 
+    full_name=None, 
+    email=None, 
+    area=None, 
+    vacation_days_total=30, 
+    manager_id=None,
+    location="CUSCO" # <-- NUEVO PARÁMETRO
+):
     db = SessionLocal()
-    # YA NO HASHEAMOS NADA
     u = models.User(
         username=username, 
-        # password_hash=hashed,  <-- ELIMINAR ESTA LÍNEA
         role=role, 
         full_name=full_name, 
         email=email, 
         area=area,
         vacation_days_total=vacation_days_total,
-        manager_id=manager_id
+        manager_id=manager_id,
+        location=location # <-- ASIGNARLO
     )
     db.add(u)
     db.commit()
     db.refresh(u)
     db.close()
-    return u
     return u
 
 # --- MODIFICAR get_user_vacation_balance (FASE 5.3) ---
@@ -313,10 +320,16 @@ def get_holiday(db: Session, holiday_id: int):
     return db.query(models.Holiday).filter(models.Holiday.id == holiday_id).first()
 def get_holiday_by_date(db: Session, holiday_date: date):
     return db.query(models.Holiday).filter(models.Holiday.holiday_date == holiday_date).first()
-def get_holidays_by_year(db: Session, year: int):
+# app/crud.py
+
+def get_holidays_by_year(db: Session, year: int, user_location: str = "CUSCO"):
+    """
+    Trae los feriados 'GENERAL' y los feriados específicos de la 'user_location'.
+    """
     return db.query(models.Holiday).filter(
         models.Holiday.holiday_date >= date(year, 1, 1),
-        models.Holiday.holiday_date <= date(year, 12, 31)
+        models.Holiday.holiday_date <= date(year, 12, 31),
+        models.Holiday.location.in_(["GENERAL", user_location]) # <-- MAGIA AQUÍ
     ).order_by(models.Holiday.holiday_date).all()
 def create_holiday(db: Session, holiday_date: date, name: str, is_national: bool = True):
     db_holiday = models.Holiday(holiday_date=holiday_date, name=name, is_national=is_national)
@@ -588,9 +601,9 @@ def admin_update_user(
     area: str, 
     vacation_days_total: int, 
     manager_id: int,
-    vacation_policy_id: int = None  # <--- NUEVO PARÁMETRO
+    vacation_policy_id: int = None,
+    location: str = "CUSCO" # <-- NUEVO PARÁMETRO
 ):
-    """Actualiza los detalles de un usuario desde el panel de admin."""
     user.username = username
     user.full_name = full_name
     user.email = email
@@ -598,12 +611,12 @@ def admin_update_user(
     user.area = area
     user.vacation_days_total = vacation_days_total
     user.manager_id = manager_id if manager_id else None
-    user.vacation_policy_id = vacation_policy_id if vacation_policy_id else None # <--- ACTUALIZACIÓN
+    user.vacation_policy_id = vacation_policy_id if vacation_policy_id else None
+    user.location = location # <-- ACTUALIZARLO
     
     db.commit()
     db.refresh(user)
     return user
-
 # app/crud.py
 # (AÑADIR AL FINAL DEL ARCHIVO)
 

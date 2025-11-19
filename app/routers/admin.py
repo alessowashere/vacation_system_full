@@ -34,23 +34,48 @@ def admin_dashboard(request: Request):
     return tmpl.render({"request": request})
 
 # --- RUTAS DE FERIADOS ---
-
 @router.get("/feriados", response_class=HTMLResponse, name="admin_feriados")
 def admin_feriados(request: Request, db: Session = Depends(get_db)):
-    year = datetime.now().year
-    holidays = crud.get_holidays_by_year(db, year)
+    # CAMBIO: Fijamos el año a 2026 por defecto, o usamos el actual + 1
+    current_year = datetime.now().year
+    target_year = 2026 if current_year < 2026 else current_year
+    
+    # Modificamos la consulta para traer TODOS los locations para que el admin los vea
+    # (Nota: crud.get_holidays_by_year filtra por location, aquí queremos ver todos para gestionar)
+    holidays = db.query(models.Holiday).filter(
+        models.Holiday.holiday_date >= date(target_year, 1, 1),
+        models.Holiday.holiday_date <= date(target_year, 12, 31)
+    ).order_by(models.Holiday.holiday_date).all()
+    
     tmpl = templates.get_template("admin_feriados.html")
-    return tmpl.render({"request": request, "holidays": holidays, "year": year})
+    return tmpl.render({"request": request, "holidays": holidays, "year": target_year})
 
 @router.post("/feriados", name="admin_create_holiday")
-def admin_create_holiday(request: Request, holiday_date_str: str = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+def admin_create_holiday(
+    request: Request, 
+    holiday_date_str: str = Form(...), 
+    name: str = Form(...), 
+    location: str = Form(...), # <-- NUEVO CAMPO
+    db: Session = Depends(get_db)
+):
     try:
         holiday_date = datetime.strptime(holiday_date_str, "%Y-%m-%d").date()
     except ValueError:
         return RedirectResponse(url=request.url_for("admin_feriados"), status_code=303)
 
-    if not crud.get_holiday_by_date(db, holiday_date):
-        crud.create_holiday(db, holiday_date=holiday_date, name=name)
+    # Crear feriado con ubicación
+    # Nota: Quitamos la validación estricta de duplicados por fecha global, 
+    # ahora debería ser fecha + location (o permitimos duplicados si es diferente sede)
+    
+    new_holiday = models.Holiday(
+        holiday_date=holiday_date, 
+        name=name, 
+        location=location,
+        is_national=(location == "GENERAL")
+    )
+    db.add(new_holiday)
+    db.commit()
+    
     return RedirectResponse(url=request.url_for("admin_feriados"), status_code=303)
 
 @router.post("/feriados/{holiday_id}/delete", name="admin_delete_holiday")
@@ -121,6 +146,7 @@ def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
 @router.post("/users/new", name="admin_user_create")
 async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    location = form.get("location", "CUSCO")
     username = form.get("username")
     # password = form.get("password") <--- ELIMINAR
     full_name = form.get("full_name")
@@ -144,7 +170,8 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     try:
         user = crud.create_user(
             username=username, full_name=full_name, email=email,
-            role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id
+            role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id,
+            location=location # <-- PASARLO AL CRUD
         )
         # Actualizar política manualmente si create_user no lo soporta aún
         if vacation_policy_id:
@@ -182,6 +209,7 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
     if not user: raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     form = await request.form()
+    location = form.get("location", "CUSCO") # <-- LEER DEL FORMULARIO
     username = form.get("username")
     full_name = form.get("full_name")
     email = form.get("email")
@@ -204,7 +232,8 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
     crud.admin_update_user(
         db=db, user=user, username=username, full_name=full_name, email=email,
         role=role, area=area, vacation_days_total=vacation_days_total,
-        manager_id=manager_id, vacation_policy_id=vacation_policy_id
+        manager_id=manager_id, vacation_policy_id=vacation_policy_id,
+        location=location # <-- PASARLO AL CRUD
     )
     
     # CORRECCIÓN AQUÍ: str() alrededor de request.url_for

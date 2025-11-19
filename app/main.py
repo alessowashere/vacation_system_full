@@ -14,6 +14,7 @@ from app.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import Optional # <-- IMPORTANTE AÑADIR ESTO
+from app.utils.email import send_email_async # <-- Asegúrate de importar esto
 
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
@@ -149,7 +150,7 @@ async def create_vacation(
     request: Request, 
     start_date: str = Form(...), 
     period_type: int = Form(...), 
-    target_user_id: Optional[int] = Form(None), # <-- NUEVO CAMPO OPCIONAL
+    target_user_id: Optional[int] = Form(None),
     file: UploadFile = File(None), 
     current=Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -191,12 +192,30 @@ async def create_vacation(
             f.write(await file.read())
             
     try:
-        # Creamos la vacación para 'user_to_create_for'
         vp = crud.create_vacation(db, user_to_create_for, start_date, period_type, file_path_in_db)
         
-        # Si fue creada por un jefe para otro, agregamos un log extra para claridad
         if user_to_create_for.id != current.id:
             crud.create_vacation_log(db, vp, current, f"Solicitud creada por el jefe/admin: {current.username}")
+        manager = user_to_create_for.manager
+        if manager and manager.email:
+            approval_link = str(request.url_for('login_page')) # O link directo al dashboard
+            
+            await send_email_async(
+                subject=f"📩 Nueva Solicitud: {user_to_create_for.full_name}",
+                email_to=[manager.email],
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3 style="color: #2c3e50;">Nueva Solicitud de Vacaciones</h3>
+                    <p>El colaborador <b>{user_to_create_for.full_name}</b> ha registrado una solicitud.</p>
+                    <ul>
+                        <li><b>Inicio:</b> {start_date}</li>
+                        <li><b>Días:</b> {period_type}</li>
+                    </ul>
+                    <p>Por favor, ingresa al sistema para revisar y tramitar (enviar a RRHH).</p>
+                    <a href="{approval_link}" style="background-color:#3498db; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">Ir al Sistema</a>
+                </div>
+                """
+            )
 
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
     

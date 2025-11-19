@@ -9,6 +9,9 @@ from app.auth import get_current_user, get_current_manager_user, get_current_hr_
 from app.db import get_db
 from app.utils.email import send_email_async  # Importamos la utilidad
 
+def get_hr_emails(db: Session):
+    hr_users = db.query(models.User).filter(models.User.role.in_(['hr', 'admin'])).all()
+    return [u.email for u in hr_users if u.email]
 router = APIRouter(
     prefix="/gestion/actions",
     tags=["Actions"]
@@ -96,6 +99,21 @@ async def submit_individual_vacation(
     if vacation.status == 'draft':
         # Esta función en crud debe actualizar el estado a 'submitted' y guardar el path
         crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name)
+        hr_emails = get_hr_emails(db)
+        if hr_emails:
+            await send_email_async(
+                subject=f"📄 Solicitud Enviada a RRHH: {vacation.user.full_name}",
+                email_to=hr_emails,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3>Nueva Solicitud Pendiente de Aprobación</h3>
+                    <p>El Jefe <b>{current.full_name}</b> ha enviado la solicitud de <b>{vacation.user.full_name}</b>.</p>
+                    <p>Estado: <b>Pendiente RRHH</b></p>
+                    <p>Se ha adjuntado el documento de sustento.</p>
+                    <a href="{str(request.url_for('login_page'))}" style="color:#3498db;">Ingresar al Sistema</a>
+                </div>
+                """
+            )
         
         # --- NOTIFICACIÓN AL ADMIN / RRHH (Opcional) ---
         # Aquí podrías avisar a RRHH que hay una nueva solicitud pendiente
@@ -225,6 +243,20 @@ async def request_modification(
             new_start_date_str=start_date,
             new_period_type=period_type
         )
+        hr_emails = get_hr_emails(db)
+        if hr_emails:
+            await send_email_async(
+                subject=f"✏️ Solicitud de MODIFICACIÓN: {vacation.user.full_name}",
+                email_to=hr_emails,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3>Solicitud de Modificación</h3>
+                    <p>El Jefe <b>{current.full_name}</b> solicita modificar las vacaciones de <b>{vacation.user.full_name}</b>.</p>
+                    <p><b>Motivo:</b> {reason_text}</p>
+                    <p>Revise la sección "Pend. Modificación" en el dashboard.</p>
+                </div>
+                """
+            )
     except Exception as e:
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg={str(e)}"
         return RedirectResponse(url=error_url, status_code=302)
@@ -233,24 +265,80 @@ async def request_modification(
 
 
 @router.post("/modification/{mod_id}/approve", name="action_approve_modification")
-def approve_modification(
+async def approve_modification(
     request: Request,
     mod_id: int,
     current=Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
-    crud.approve_modification(db, mod_id=mod_id, actor=current)
+    # crud.approve_modification devuelve el objeto mod_req actualizado
+    mod_req = crud.approve_modification(db, mod_id=mod_id, actor=current)
+    
+    if mod_req:
+        # Datos para el correo
+        employee = mod_req.vacation_period.user
+        manager = mod_req.requesting_user
+        new_start = mod_req.new_start_date
+        new_end = mod_req.new_end_date
+        
+        # Lista de destinatarios: Empleado y Jefe
+        recipients = []
+        if employee.email: recipients.append(employee.email)
+        if manager.email and manager.email != employee.email: recipients.append(manager.email)
+        
+        if recipients:
+            await send_email_async(
+                subject="✅ Modificación de Vacaciones APROBADA",
+                email_to=recipients,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3 style="color: #27ae60;">Modificación Aprobada</h3>
+                    <p>La solicitud de modificación para <b>{employee.full_name}</b> ha sido aprobada por RRHH.</p>
+                    <hr>
+                    <p><b>Nuevas Fechas Confirmadas:</b></p>
+                    <ul>
+                        <li>Desde: {new_start}</li>
+                        <li>Hasta: {new_end}</li>
+                    </ul>
+                    <p>El sistema ha sido actualizado.</p>
+                </div>
+                """
+            )
+
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 
 @router.post("/modification/{mod_id}/reject", name="action_reject_modification")
-def reject_modification(
+async def reject_modification(
     request: Request,
     mod_id: int,
     current=Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
-    crud.reject_modification(db, mod_id=mod_id, actor=current)
+    mod_req = crud.reject_modification(db, mod_id=mod_id, actor=current)
+    
+    if mod_req:
+        employee = mod_req.vacation_period.user
+        manager = mod_req.requesting_user
+        
+        recipients = []
+        if employee.email: recipients.append(employee.email)
+        if manager.email and manager.email != employee.email: recipients.append(manager.email)
+        
+        if recipients:
+            await send_email_async(
+                subject="❌ Modificación de Vacaciones RECHAZADA",
+                email_to=recipients,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3 style="color: #c0392b;">Modificación Rechazada</h3>
+                    <p>La solicitud de modificación para <b>{employee.full_name}</b> ha sido rechazada por RRHH.</p>
+                    <p>Se mantienen las fechas originales (o el estado previo) de la vacación.</p>
+                    <p>Por favor contactar con RRHH para más detalles.</p>
+                </div>
+                """
+            )
+
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 @router.post("/vacation/{vacation_id}/comment", name="action_add_comment")
@@ -317,6 +405,20 @@ async def request_suspension(
             file_name=file_name,
             new_end_date_str=new_end_date
         )
+        hr_emails = get_hr_emails(db)
+        if hr_emails:
+            await send_email_async(
+                subject=f"⏸️ Solicitud de SUSPENSIÓN: {vacation.user.full_name}",
+                email_to=hr_emails,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3>Solicitud de Suspensión ({suspension_type})</h3>
+                    <p>El Jefe <b>{current.full_name}</b> solicita suspender las vacaciones de <b>{vacation.user.full_name}</b>.</p>
+                    <p><b>Motivo:</b> {reason_text}</p>
+                    <p>Revise la sección "Pend. Suspensión" en el dashboard.</p>
+                </div>
+                """
+            )
     except Exception as e:
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg={str(e)}"
         return RedirectResponse(url=error_url, status_code=302)
@@ -325,26 +427,78 @@ async def request_suspension(
 
 
 @router.post("/suspension/{sus_id}/approve", name="action_approve_suspension")
-def approve_suspension(
+async def approve_suspension(
     request: Request,
     sus_id: int,
-    current=Depends(get_current_hr_user), # Solo HR
+    current=Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
     """Aprueba la solicitud de suspensión."""
-    crud.approve_suspension(db, sus_id=sus_id, actor=current)
+    sus_req = crud.approve_suspension(db, sus_id=sus_id, actor=current)
+    
+    if sus_req:
+        employee = sus_req.vacation_period.user
+        manager = sus_req.requesting_user
+        tipo = sus_req.suspension_type.upper()
+        
+        recipients = []
+        if employee.email: recipients.append(employee.email)
+        if manager.email and manager.email != employee.email: recipients.append(manager.email)
+        
+        detalle_extra = ""
+        if sus_req.suspension_type == 'parcial':
+            detalle_extra = f"<p>Se ha recalculado el periodo. Nuevo fin: <b>{sus_req.new_end_date_parcial}</b></p>"
+        else:
+            detalle_extra = "<p>El periodo ha quedado suspendido y los días retornaron al saldo.</p>"
+
+        if recipients:
+            await send_email_async(
+                subject=f"✅ Suspensión de Vacaciones APROBADA ({tipo})",
+                email_to=recipients,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3 style="color: #27ae60;">Suspensión {tipo} Aprobada</h3>
+                    <p>La solicitud de suspensión para <b>{employee.full_name}</b> ha sido procesada exitosamente.</p>
+                    {detalle_extra}
+                    <p>Saludos, RRHH.</p>
+                </div>
+                """
+            )
+
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 
 @router.post("/suspension/{sus_id}/reject", name="action_reject_suspension")
-def reject_suspension(
+async def reject_suspension(
     request: Request,
     sus_id: int,
-    current=Depends(get_current_hr_user), # Solo HR
+    current=Depends(get_current_hr_user),
     db: Session = Depends(get_db)
 ):
     """Rechaza la solicitud de suspensión."""
-    crud.reject_suspension(db, sus_id=sus_id, actor=current)
+    sus_req = crud.reject_suspension(db, sus_id=sus_id, actor=current)
+    
+    if sus_req:
+        employee = sus_req.vacation_period.user
+        manager = sus_req.requesting_user
+        
+        recipients = []
+        if employee.email: recipients.append(employee.email)
+        if manager.email and manager.email != employee.email: recipients.append(manager.email)
+        
+        if recipients:
+            await send_email_async(
+                subject="❌ Suspensión de Vacaciones RECHAZADA",
+                email_to=recipients,
+                body=f"""
+                <div style="font-family: sans-serif;">
+                    <h3 style="color: #c0392b;">Suspensión Rechazada</h3>
+                    <p>La solicitud de suspensión para <b>{employee.full_name}</b> ha sido rechazada.</p>
+                    <p>La vacación original sigue vigente y aprobada tal como estaba.</p>
+                </div>
+                """
+            )
+
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 @router.post("/vacation/request", name="action_request_vacation")

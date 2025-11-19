@@ -70,7 +70,15 @@
           {% endfor %}
         </select>
       </div>
-
+      <div>
+        <label for="location" class="block text-sm font-medium text-gray-700">Sede / Ubicación:</label>
+        <select name="location" id="location" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+          <option value="CUSCO" {% if user and user.location == 'CUSCO' %}selected{% endif %}>Sede Central (Cusco)</option>
+          <option value="P_MALDONADO" {% if user and user.location == 'P_MALDONADO' %}selected{% endif %}>Filial Puerto Maldonado</option>
+          <option value="QUILLABAMBA" {% if user and user.location == 'QUILLABAMBA' %}selected{% endif %}>Filial Quillabamba</option>
+          <option value="SICUANI" {% if user and user.location == 'SICUANI' %}selected{% endif %}>Filial Sicuani</option>
+        </select>
+      </div>
       <div class="md:col-span-2">
       <label for="vacation_policy_id" class="block text-sm font-medium text-gray-700">Régimen de Vacaciones (Restricciones):</label>
       <select name="vacation_policy_id" id="vacation_policy_id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">

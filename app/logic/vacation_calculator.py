@@ -6,11 +6,13 @@ from datetime import date, timedelta
 from app import crud, models
 
 class VacationCalculator:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user: models.User = None): # Recibir el usuario
         self.db = db
+        self.user = user
         self.settings = self.load_settings()
-        self.holidays = self.load_holidays()
-
+        # Pasamos la ubicación del usuario, si no hay, asumimos CUSCO
+        location = user.location if user else "CUSCO"
+        self.holidays = self.load_holidays(location)
     def load_settings(self):
         """Carga las configuraciones del sistema desde la BD."""
         settings_db = crud.get_all_settings(self.db)
@@ -23,10 +25,12 @@ class VacationCalculator:
             "ALLOW_START_ON_WEEKEND": settings_dict.get("ALLOW_START_ON_WEEKEND", "False") == "True",
         }
 
-    def load_holidays(self):
+    def load_holidays(self, location: str):
         current_year = date.today().year
-        holidays_this_year = crud.get_holidays_by_year(self.db, current_year)
-        holidays_next_year = crud.get_holidays_by_year(self.db, current_year + 1)
+        # Pedimos feriados de este año y el siguiente filtrados por ubicación
+        holidays_this_year = crud.get_holidays_by_year(self.db, current_year, location)
+        holidays_next_year = crud.get_holidays_by_year(self.db, current_year + 1, location)
+        
         return {h.holiday_date for h in holidays_this_year + holidays_next_year}
 
     def is_weekend(self, day: date):
