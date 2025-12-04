@@ -201,17 +201,17 @@ async def create_vacation(
             approval_link = str(request.url_for('login_page')) # O link directo al dashboard
             
             await send_email_async(
-                subject=f"📩 Nueva Solicitud: {user_to_create_for.full_name}",
+                subject=f"NUEVA SOLICITUD DE VACACIONES - {user_to_create_for.full_name}",
                 email_to=[manager.email],
                 body=f"""
                 <div style="font-family: sans-serif;">
-                    <h3 style="color: #2c3e50;">Nueva Solicitud de Vacaciones</h3>
+                    <h3 style="color: #2c3e50;">PROCESO DE VACACIONES 2026</h3>
                     <p>El colaborador <b>{user_to_create_for.full_name}</b> ha registrado una solicitud.</p>
                     <ul>
                         <li><b>Inicio:</b> {start_date}</li>
                         <li><b>Días:</b> {period_type}</li>
                     </ul>
-                    <p>Por favor, ingresa al sistema para revisar y tramitar (enviar a RRHH).</p>
+                    <p>Por favor, ingresa al sistema para revisar y tramitar.</p>
                     <a href="{approval_link}" style="background-color:#3498db; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">Ir al Sistema</a>
                 </div>
                 """
