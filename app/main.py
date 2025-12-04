@@ -3,11 +3,7 @@
 
 import os
 from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
-from app.routers import admin as admin_router
-from app.routers import actions as actions_router
-from app.routers import reports as reports_router # <-- IMPORTAR
 from fastapi.responses import HTMLResponse, RedirectResponse
-from app.routers import reports as reports_router
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
@@ -44,8 +40,6 @@ os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.state.oauth = oauth
-app.include_router(reports_router.router)
-
 
 # --- RUTAS DE AUTENTICACIÓN ---
 @app.get("/", response_class=HTMLResponse, name="home")
@@ -430,4 +424,3 @@ app.include_router(api_router, prefix="/api")
 
 app.include_router(admin_router.router)
 app.include_router(actions_router.router)
-app.include_router(reports_router.router) # <-- INCLUIR

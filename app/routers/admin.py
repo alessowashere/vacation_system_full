@@ -247,12 +247,6 @@ def admin_user_reset_password(request: Request, user_id: int, db: Session = Depe
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Password reseteado.", status_code=303)
 
 # --- ORGANIGRAMA ---
-# En app/routers/admin.py
-
-@router.get("/reports", response_class=HTMLResponse, name="admin_reports_view")
-def admin_reports_view(request: Request, success_msg: Optional[str] = None):
-    tmpl = templates.get_template("admin_reports.html")
-    return tmpl.render({"request": request, "success_msg": success_msg})
 
 @router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
 def admin_org_chart(request: Request, db: Session = Depends(get_db)):
