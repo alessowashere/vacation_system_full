@@ -58,69 +58,63 @@ async def submit_area_to_hr(
 async def submit_individual_vacation(
     request: Request,
     vacation_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile = File(None), # <--- Aquí el cambio clave: File(None) lo hace opcional
     current: models.User = Depends(get_current_manager_user),
     db: Session = Depends(get_db)
 ):
     """
-    El JEFE sube el documento individual y envía la solicitud a RRHH.
+    El JEFE envía la solicitud a RRHH. El documento es opcional.
     """
     vacation = crud.get_vacation_by_id(db, vacation_id)
-    # Validar que la vacación exista y pertenezca al área del jefe actual
+    
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     
+    # Validar que sea subordinado (o que seas admin)
     if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado: No es tu subordinado")
 
-    # Validar archivo
-    if not file or not file.filename:
-        error_url = str(request.url_for('dashboard')) + "?error=general&msg=Debe adjuntar el documento firmado."
-        return RedirectResponse(url=error_url, status_code=302)
+    # --- LÓGICA DE ARCHIVO (OPCIONAL) ---
+    file_name = None
+    if file and file.filename:
+        uploads_dir = "uploads"
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        safe_filename = "".join(c for c in file.filename if c.isalnum() or c in (' ._-'))
+        file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_filename}"
+        file_disk_path = os.path.join(uploads_dir, file_name)
 
-    # Guardar archivo
-    uploads_dir = "uploads"
-    os.makedirs(uploads_dir, exist_ok=True)
-    
-    # Limpiar nombre de archivo para evitar problemas
-    safe_filename = "".join(c for c in file.filename if c.isalnum() or c in (' ._-'))
-    file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_filename}"
-    file_disk_path = os.path.join(uploads_dir, file_name)
+        try:
+            content = await file.read()
+            with open(file_disk_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            # Si intentó subir y falló, avisamos. Si no intentó, no pasa nada.
+            print(f"Error guardando archivo: {e}")
+            raise HTTPException(status_code=500, detail="Error al guardar el archivo adjunto")
 
-    try:
-        content = await file.read()
-        with open(file_disk_path, "wb") as f:
-            f.write(content)
-    except Exception as e:
-        print(f"Error guardando archivo: {e}")
-        raise HTTPException(status_code=500, detail="Error al guardar el archivo")
-
-    # Actualizar estado en BD
+    # --- ACTUALIZACIÓN DE ESTADO ---
     if vacation.status == 'draft':
-        # Esta función en crud debe actualizar el estado a 'submitted' y guardar el path
         crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name)
+        
         hr_emails = get_hr_emails(db)
         if hr_emails:
+            adjunto_msg = "Se ha adjuntado documento." if file_name else "Envío directo (validado por sistema)."
             await send_email_async(
                 subject=f"📄 Solicitud Enviada a RRHH: {vacation.user.full_name}",
                 email_to=hr_emails,
                 body=f"""
                 <div style="font-family: sans-serif;">
                     <h3>Nueva Solicitud Pendiente de Aprobación</h3>
-                    <p>El Jefe <b>{current.full_name}</b> ha enviado la solicitud de <b>{vacation.user.full_name}</b>.</p>
+                    <p>El Jefe <b>{current.full_name}</b> ha autorizado y enviado la solicitud de <b>{vacation.user.full_name}</b>.</p>
                     <p>Estado: <b>Pendiente RRHH</b></p>
-                    <p>Se ha adjuntado el documento de sustento.</p>
+                    <p>Detalle: {adjunto_msg}</p>
                     <a href="{str(request.url_for('login_page'))}" style="color:#3498db;">Ingresar al Sistema</a>
                 </div>
                 """
             )
         
-        # --- NOTIFICACIÓN AL ADMIN / RRHH (Opcional) ---
-        # Aquí podrías avisar a RRHH que hay una nueva solicitud pendiente
-        
     return RedirectResponse(url=str(request.url_for('dashboard')) + "?success_msg=Enviado a RRHH correctamente.", status_code=303)
-
-
 
 
 # app/routers/actions.py
