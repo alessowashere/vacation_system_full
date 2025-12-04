@@ -128,43 +128,94 @@ def get_dashboard_data(db: Session, user: models.User):
     data = {}
     today = date.today()
     
-    # --- Lógica de Admin/HR (Sin cambios) ---
+    # --- Lógica de Admin/HR (Sin cambios, ven todo) ---
     if user.role == "admin" or user.role == "hr":
-        data["draft_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).filter(models.VacationPeriod.status == 'draft').all()
-        data["pending_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).filter(models.VacationPeriod.status == 'pending_hr').all()
-        data["pending_modifications"] = db.query(models.ModificationRequest).options(joinedload(models.ModificationRequest.requesting_user), joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)).filter(models.ModificationRequest.status == 'pending_review').all()
-        data["pending_suspensions"] = db.query(models.SuspensionRequest).options(joinedload(models.SuspensionRequest.requesting_user), joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)).filter(models.SuspensionRequest.status == 'pending_review').all()
-        data["finalized_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).filter(models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])).all()
-        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).filter(models.VacationPeriod.status == 'approved', models.VacationPeriod.start_date > today).order_by(models.VacationPeriod.start_date).all()
+        data["draft_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(models.VacationPeriod.status == 'draft').all()
         
-    # --- LÓGICA DE MANAGER (AQUÍ ESTÁ LA CORRECCIÓN) ---
-    elif user.role == "manager":
-        # 1. BUSQUEDA EXPLÍCITA DE COLABORADORES
-        # Buscamos en la BD todos los usuarios donde el 'manager_id' sea TU id.
-        subordinates = db.query(models.User).filter(models.User.manager_id == user.id).all()
+        data["pending_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(models.VacationPeriod.status == 'pending_hr').all()
         
-        team_data = []
-        for sub in subordinates:
-            # Calculamos el saldo real al momento
-            balance = get_user_vacation_balance(db, sub)
-            team_data.append({
-                "user": sub,
-                "balance": balance
-            })
-        # Guardamos esto en 'my_team' para que el HTML lo encuentre
-        data["my_team"] = team_data 
+        data["pending_modifications"] = db.query(models.ModificationRequest).options(
+            joinedload(models.ModificationRequest.requesting_user),
+            joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).filter(models.ModificationRequest.status == 'pending_review').all()
+        
+        data["pending_suspensions"] = db.query(models.SuspensionRequest).options(
+            joinedload(models.SuspensionRequest.requesting_user),
+            joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).filter(models.SuspensionRequest.status == 'pending_review').all()
 
-        # 2. Consultas de solicitudes (Filtradas por tu equipo)
-        data["draft_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).join(models.User).filter(models.User.manager_id == user.id, models.VacationPeriod.status == 'draft').all()
-        data["pending_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).join(models.User).filter(models.User.manager_id == user.id, models.VacationPeriod.status == 'pending_hr').all()
-        data["pending_modifications"] = db.query(models.ModificationRequest).options(joinedload(models.ModificationRequest.requesting_user), joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)).join(models.VacationPeriod).join(models.User).filter(models.User.manager_id == user.id, models.ModificationRequest.status == 'pending_review').all()
-        data["pending_suspensions"] = db.query(models.SuspensionRequest).options(joinedload(models.SuspensionRequest.requesting_user), joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)).join(models.VacationPeriod).join(models.User).filter(models.User.manager_id == user.id, models.SuspensionRequest.status == 'pending_review').all()
-        data["finalized_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).join(models.User).filter(models.User.manager_id == user.id, models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])).all()
-        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user)).join(models.User).filter(models.User.manager_id == user.id, models.VacationPeriod.status == 'approved', models.VacationPeriod.start_date > today).order_by(models.VacationPeriod.start_date).all()
+        data["finalized_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(
+            models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])
+        ).all()
         
-    # --- Lógica de Empleado ---
+        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).filter(
+            models.VacationPeriod.status == 'approved',
+            models.VacationPeriod.start_date > today
+        ).order_by(models.VacationPeriod.start_date).all()
+        
+    # --- LÓGICA DE MANAGER (CORREGIDA) ---
+    elif user.role == "manager":
+        # Ahora filtra por 'user.id' (el manager)
+        # en la columna 'manager_id' del empleado.
+        
+        data["draft_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.VacationPeriod.status == 'draft'
+        ).all()
+        
+        data["pending_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.VacationPeriod.status == 'pending_hr'
+        ).all()
+        
+        data["pending_modifications"] = db.query(models.ModificationRequest).options(
+            joinedload(models.ModificationRequest.requesting_user),
+            joinedload(models.ModificationRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).join(models.VacationPeriod).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.ModificationRequest.status == 'pending_review'
+        ).all()
+        
+        data["pending_suspensions"] = db.query(models.SuspensionRequest).options(
+            joinedload(models.SuspensionRequest.requesting_user),
+            joinedload(models.SuspensionRequest.vacation_period).joinedload(models.VacationPeriod.user)
+        ).join(models.VacationPeriod).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.SuspensionRequest.status == 'pending_review'
+        ).all()
+
+        data["finalized_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.VacationPeriod.status.in_(['approved', 'rejected', 'suspended'])
+        ).all()
+        
+        data["upcoming_vacations"] = db.query(models.VacationPeriod).options(
+            joinedload(models.VacationPeriod.user)
+        ).join(models.User).filter(
+            models.User.manager_id == user.id, # <-- CORREGIDO
+            models.VacationPeriod.status == 'approved',
+            models.VacationPeriod.start_date > today
+        ).order_by(models.VacationPeriod.start_date).all()
+        
+    # --- Lógica de Empleado (Sin cambios) ---
     else:
-        data["my_vacations"] = db.query(models.VacationPeriod).filter(models.VacationPeriod.user_id == user.id).order_by(models.VacationPeriod.start_date).all()
+        data["my_vacations"] = db.query(models.VacationPeriod).filter(
+            models.VacationPeriod.user_id == user.id
+        ).order_by(models.VacationPeriod.start_date).all()
         
     return data
 # --- FIN DE MODIFICACIÓN ---
@@ -251,20 +302,12 @@ def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User
     
     db.commit()
 
-def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor: models.User, file_name: str = None):
+def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor: models.User, file_name: str):
     if vacation.status == 'draft':
         vacation.status = "pending_hr"
-        # Si se envió archivo, lo guardamos. Si no, queda como estaba (o nulo)
-        if file_name:
-            vacation.manager_individual_doc_path = file_name
-        
+        vacation.manager_individual_doc_path = file_name # <-- AÑADIDO
         db.commit()
-        
-        log_text = "Enviado a RRHH (Validación digital directa)."
-        if file_name:
-            log_text = "Enviado a RRHH con documento de sustento."
-            
-        create_vacation_log(db, vacation, actor, log_text)
+        create_vacation_log(db, vacation, actor, f"Enviado individualmente a RRHH (con sustento).")
 
 def delete_vacation_period(db: Session, vacation_id: int):
     db_vacation = get_vacation_by_id(db, vacation_id)

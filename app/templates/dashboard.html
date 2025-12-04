@@ -97,336 +97,908 @@
   
   {% elif user.role == 'manager' %}
     
-    <div class="mb-8 bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200">
-      <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-        <div>
-          <h3 class="text-lg font-bold text-gray-800">Mi Equipo de Trabajo</h3>
-          <p class="text-sm text-gray-500">Gestión directa de saldos y asignaciones</p>
+    <div class="mb-6 p-4 bg-white shadow-md rounded-lg">
+      <h3 class="text-lg font-semibold mb-3">Panel de Manager (Área: {{ user.area }})</h3>
+      <form action="{{ url_for('action_submit_area_to_hr') }}" method="post" enctype="multipart/form-data">
+        <div class="mb-4">
+          <label for="file" class="block text-sm font-medium text-gray-700">Documento Consolidado (Obligatorio)</label>
+          <input type="file" name="file" id="file" required
+                 class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
         </div>
-      </div>
-      
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Colaborador</th>
-            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cargo / Rol</th>
-            <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Saldo Vacaciones</th>
-            <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Acción Rápida</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          {% for item in data.my_team %}
-          <tr class="hover:bg-blue-50 transition duration-150">
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="flex items-center">
-                <div class="ml-0">
-                  <div class="text-sm font-medium text-gray-900">{{ item.user.full_name or item.user.username }}</div>
-                  <div class="text-xs text-gray-500">{{ item.user.email }}</div>
-                </div>
-              </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ item.user.role|capitalize }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">
-              <span class="px-3 py-1 inline-flex text-sm leading-5 font-bold rounded-full 
-                {% if item.balance > 15 %} bg-green-100 text-green-800 border border-green-200
-                {% elif item.balance > 5 %} bg-yellow-100 text-yellow-800 border border-yellow-200
-                {% else %} bg-red-100 text-red-800 border border-red-200 {% endif %}">
-                {{ item.balance }} días disp.
-              </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-              <button onclick="openAssignModal('{{ item.user.id }}', '{{ item.user.full_name }}', '{{ item.balance }}')" 
-                      class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded shadow-sm text-xs">
-                + Asignar
-              </button>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="4" class="px-6 py-10 text-center text-gray-500 italic">
-              No tienes colaboradores asignados. (Verifica con RRHH o Admin)
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300">
+          Enviar Todas las Solicitudes 'Borrador' a RRHH
+        </button>
+      </form>
     </div>
 
-    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Estado de Solicitudes del Área</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
-      
-      <div class="p-4 rounded-lg shadow bg-yellow-500 text-white">
-        <h3 class="font-bold text-sm uppercase">Borradores</h3>
-        <p class="text-3xl font-bold">{{ data.draft_vacations|length }}</p>
-        <p class="text-xs opacity-75">Requieren tu envío</p>
-      </div>
-
-      <div class="p-4 rounded-lg shadow bg-blue-600 text-white">
-        <h3 class="font-bold text-sm uppercase">En RRHH</h3>
-        <p class="text-3xl font-bold">{{ data.pending_vacations|length }}</p>
-        <p class="text-xs opacity-75">Esperando aprobación</p>
-      </div>
+    <h2 class="text-xl font-semibold mb-4 text-gray-800">Resumen del Área: {{ user.area }}</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
       
       <div class="p-4 rounded-lg shadow bg-green-600 text-white">
-        <h3 class="font-bold text-sm uppercase">Aprobadas</h3>
+        <h3 class="font-bold text-lg">Próximos a Tomar</h3>
         <p class="text-3xl font-bold">{{ data.upcoming_vacations|length }}</p>
-        <p class="text-xs opacity-75">Programadas</p>
+      </div>
+
+      <div class="p-4 rounded-lg shadow bg-blue-500 text-white">
+        <h3 class="font-bold text-lg">Pendientes RRHH</h3>
+        <p class="text-3xl font-bold">{{ data.pending_vacations|length }}</p>
       </div>
       
       <div class="p-4 rounded-lg shadow bg-purple-500 text-white">
-        <h3 class="font-bold text-sm uppercase">En Modificación</h3>
+        <h3 class="font-bold text-lg">Pend. Modificación</h3>
         <p class="text-3xl font-bold">{{ data.pending_modifications|length }}</p>
       </div>
       
       <div class="p-4 rounded-lg shadow bg-red-500 text-white">
-        <h3 class="font-bold text-sm uppercase">En Suspensión</h3>
+        <h3 class="font-bold text-lg">Pend. Suspensión</h3>
         <p class="text-3xl font-bold">{{ data.pending_suspensions|length }}</p>
+      </div>
+      
+      <div class="p-4 rounded-lg shadow bg-yellow-500 text-white">
+        <h3 class="font-bold text-lg">Borradores (No Oficial)</h3>
+        <p class="text-3xl font-bold">{{ data.draft_vacations|length }}</p>
       </div>
       
     </div>
   
-    <div class="mb-4 flex border-b border-gray-200 overflow-x-auto">
-      <button type="button" class="tab-button active-tab" data-target="panel-borradores">
+    <div class="mb-4 flex border-b border-gray-200">
+      <button type="button" class="tab-button active-tab" data-target="panel-proximos">
+        Próximos ({{ data.upcoming_vacations|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-borradores">
         Borradores ({{ data.draft_vacations|length }})
       </button>
       <button type="button" class="tab-button" data-target="panel-pendientes">
-        En RRHH ({{ data.pending_vacations|length }})
+        Pend. RRHH ({{ data.pending_vacations|length }})
       </button>
-      <button type="button" class="tab-button" data-target="panel-proximos">
-        Programadas ({{ data.upcoming_vacations|length }})
+      <button type="button" class="tab-button" data-target="panel-modificaciones">
+        Modif. ({{ data.pending_modifications|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-suspensiones">
+        Suspen. ({{ data.pending_suspensions|length }})
       </button>
       <button type="button" class="tab-button" data-target="panel-historico">
-        Histórico
+        Histórico ({{ data.finalized_vacations|length }})
       </button>
     </div>
   
-    <div id="panel-borradores" class="tab-panel active-panel">
+    <div id="panel-proximos" class="tab-panel active-panel">
+      <h2 class="text-xl font-semibold mb-4 text-green-700">Próximos a Tomar Vacaciones (Aprobados)</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-proximos" 
+             placeholder="Buscar en próximos (por usuario, fechas...)">
+             
       <div class="overflow-x-auto shadow-md rounded-lg mb-8">
         <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-yellow-50">
+          <thead class="bg-green-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Usuario</th>
-              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Fechas</th>
-              <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Días</th>
-              <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acción</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            {% for v in data.draft_vacations %}
+          <tbody id="tabla-proximos" class="bg-white divide-y divide-gray-200">
+            {% for v in data.upcoming_vacations %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-700">{{ v.days }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <form action="{{ url_for('action_submit_individual', vacation_id=v.id) }}" method="post" class="inline-block" enctype="multipart/form-data">
-                    <button type="submit" class="text-white bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs font-bold mr-2">
-                        ENVIAR A RRHH &rarr;
-                    </button>
-                </form>
-                <a href="{{ url_for('vacation_edit_form', vacation_id=v.id) }}" class="text-indigo-600 hover:text-indigo-900 text-xs">Editar</a>
-                <form action="{{ url_for('action_delete_vacation', vacation_id=v.id) }}" method="post" class="inline-block ml-2">
-                    <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Eliminar</button>
-                </form>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">
+                  {{ v.start_date }} al {{ v.end_date }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.days }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                  {{ status_map.get(v.status, v.status) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                <a href="{{ url_for('vacation_suspend_form', vacation_id=v.id) }}" class="text-red-600 hover:text-red-900">
+                  Suspender...
+                </a>
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="px-6 py-4 text-center text-gray-500 text-sm">No hay borradores.</td></tr>
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay vacaciones próximas a tomar.</td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
-
-    <div id="panel-pendientes" class="tab-panel">
-        <div class="overflow-x-auto shadow-md rounded-lg mb-8">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-blue-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Usuario</th>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Fechas</th>
-                  <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Estado</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {% for v in data.pending_vacations %}
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        Esperando a RRHH
-                    </span>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500 text-sm">No hay solicitudes en RRHH.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="panel-proximos" class="tab-panel">
-        <div class="overflow-x-auto shadow-md rounded-lg mb-8">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-green-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Usuario</th>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Fechas</th>
-                  <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Gestión</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {% for v in data.upcoming_vacations %}
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <a href="{{ url_for('vacation_suspend_form', vacation_id=v.id) }}" class="text-red-600 hover:text-red-800 font-medium">Suspender</a>
-                    <a href="{{ url_for('vacation_modify_form', vacation_id=v.id) }}" class="text-blue-600 hover:text-blue-800 font-medium ml-3">Modificar</a>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500 text-sm">No hay vacaciones programadas.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="panel-historico" class="tab-panel">
-        <div class="overflow-x-auto shadow-md rounded-lg mb-8">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-100">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Usuario</th>
-                  <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Fechas</th>
-                  <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Estado Final</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {% for v in data.finalized_vacations %}
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                        {{ status_map.get(v.status, v.status) }}
-                    </span>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500 text-sm">Sin historial reciente.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="assignModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeAssignModal()"></div>
-
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-                <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data">
-                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <div class="sm:flex sm:items-start">
-                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">Asignar Vacaciones</h3>
-                                <div class="mt-2">
-                                    <p class="text-sm text-gray-500">
-                                        Empleado: <strong id="modalEmpName" class="text-gray-900"></strong><br>
-                                        Saldo: <span id="modalEmpBalance" class="text-green-600 font-bold"></span>
-                                    </p>
-                                    
-                                    <input type="hidden" name="target_user_id" id="modalEmpId">
-                                    
-                                    <div class="mt-4">
-                                        <label class="block text-sm font-medium text-gray-700">Fecha de Inicio</label>
-                                        <input type="date" name="start_date" required 
-                                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                                    </div>
-
-                                    <div class="mt-4">
-                                        <label class="block text-sm font-medium text-gray-700">Duración (Días)</label>
-                                        <select name="period_type" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                                            <option value="30">30 días</option>
-                                            <option value="15">15 días</option>
-                                            <option value="8">8 días</option>
-                                            <option value="7">7 días</option>
-                                            <option value="1">1 día (A cuenta)</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="mt-4">
-                                        <label class="block text-sm font-medium text-gray-700">Documento (Opcional)</label>
-                                        <input type="file" name="file" class="mt-1 block w-full text-sm text-gray-500">
-                                        <p class="text-xs text-gray-400 mt-1">No es obligatorio adjuntar.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 sm:ml-3 sm:w-auto sm:text-sm">
-                            Guardar
-                        </button>
-                        <button type="button" onclick="closeAssignModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                            Cancelar
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <script>
-      // Lógica de Pestañas
-      const tabButtons = document.querySelectorAll('.tab-button');
-      const tabPanels = document.querySelectorAll('.tab-panel');
+    
+    <div id="panel-borradores" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-yellow-700">No Oficial - Borradores</h2>
       
-      tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          tabButtons.forEach(btn => btn.classList.remove('active-tab'));
-          tabPanels.forEach(panel => panel.classList.remove('active-panel'));
-          
-          button.classList.add('active-tab');
-          const target = document.getElementById(button.dataset.target);
-          if(target) target.classList.add('active-panel');
-        });
-      });
-
-      // Funciones del Modal
-      function openAssignModal(id, name, balance) {
-          document.getElementById('modalEmpId').value = id;
-          document.getElementById('modalEmpName').innerText = name;
-          document.getElementById('modalEmpBalance').innerText = balance + ' días';
-          document.getElementById('assignModal').classList.remove('hidden');
-      }
-
-      function closeAssignModal() {
-          document.getElementById('assignModal').classList.add('hidden');
-      }
-    </script>
-
+      <input type="text" class="search-box" data-table="tabla-borradores" 
+             placeholder="Buscar en borradores (por usuario...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-yellow-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-borradores" class="bg-white divide-y divide-gray-200">
+            {% for v in data.draft_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">
+                  {{ v.start_date }} al {{ v.end_date }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.days }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                <a href="{{ url_for('vacation_submit_individual_form', vacation_id=v.id) }}" class="text-green-600 hover:text-green-900 mr-2">
+                  Enviar a HR...
+                </a>
+                <a href="{{ url_for('vacation_edit_form', vacation_id=v.id) }}" class="text-indigo-600 hover:text-indigo-900">Editar</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes en borrador.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <div id="panel-pendientes" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-blue-700">Oficial - Pendientes de Aprobación RRHH</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-pendientes" 
+             placeholder="Buscar en pendientes (por usuario, fechas...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-blue-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones RRHH</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-pendientes" class="bg-white divide-y divide-gray-200">
+            {% for v in data.pending_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                {% if v.consolidated_doc_path %}
+                  <a href="{{ url_for('uploads', path=v.consolidated_doc_path) }}" target="_blank" class="hover:underline">Descargar Consolidado</a>
+                {% elif v.manager_individual_doc_path %}
+                  <a href="{{ url_for('uploads', path=v.manager_individual_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento Jefe</a>
+                {% elif v.attached_file %}
+                  <a href="{{ url_for('uploads', path=v.attached_file) }}" target="_blank" class="hover:underline">Descargar Adjunto Emp.</a>
+                {% else %} <span class="text-gray-400">N/A</span> {% endif %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_vacation', vacation_id=v.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_vacation', vacation_id=v.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+                <span class="text-gray-500 manager-label-show">En espera de RRHH</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes pendientes de aprobación.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <div id="panel-modificaciones" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-purple-700">Solicitudes de Modificación</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-modificaciones" 
+             placeholder="Buscar en modificaciones (por jefe, empleado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-purple-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jefe</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles Nuevos</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-modificaciones" class="bg-white divide-y divide-gray-200">
+            {% for m in data.pending_modifications %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.full_name or m.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=m.vacation_period.id) }}" class="text-blue-600 hover:underline">
+                  {{ m.vacation_period.user.full_name or m.vacation_period.user.username }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <span class="block">Inicio: {{ m.new_start_date }}</span>
+                <span class="block">Días: {{ m.new_period_type }}</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                <a href="{{ url_for('uploads', path=m.attached_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_modification', mod_id=m.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_modification', mod_id=m.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+                <span class="text-gray-500 manager-label-show">En espera de RRHH</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes de modificación pendientes.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="panel-suspensiones" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-red-700">Solicitudes de Suspensión</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-suspensiones" 
+             placeholder="Buscar en suspensiones (por jefe, empleado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-red-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jefe</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-suspensiones" class="bg-white divide-y divide-gray-200">
+            {% for s in data.pending_suspensions %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.full_name or s.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=s.vacation_period.id) }}" class="text-blue-600 hover:underline">
+                  {{ s.vacation_period.user.full_name or s.vacation_period.user.username }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{{ s.suspension_type }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {% if s.suspension_type == 'parcial' %}
+                  <span class="block">Nuevo fin: {{ s.new_end_date_parcial }}</span>
+                {% endif %}
+                <span class="block text-xs italic mt-1">Motivo: {{ s.reason_text[:30] }}...</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                <a href="{{ url_for('uploads', path=s.attached_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_suspension', sus_id=s.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_suspension', sus_id=s.id) }}" method="post" class="inline px-1 manager-action-hide">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+                <span class="text-gray-500 manager-label-show">En espera de RRHH</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes de suspensión pendientes.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="panel-historico" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-gray-600">Histórico - Finalizadas</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-historico" 
+             placeholder="Buscar en histórico (por usuario, estado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-historico" class="bg-white divide-y divide-gray-200">
+            {% for v in data.finalized_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                             {% if v.status == 'approved' %} bg-green-100 text-green-800
+                             {% elif v.status == 'rejected' %} bg-red-100 text-red-800
+                             {% elif v.status == 'suspended' %} bg-gray-500 text-white
+                             {% else %} bg-yellow-100 text-yellow-800 {% endif %}">
+                  {{ status_map.get(v.status, v.status) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                {% if v.status == 'rejected' %}
+                    <a href="{{ url_for('vacation_modify_form', vacation_id=v.id) }}" class="text-blue-600 hover:text-blue-900">
+                      Solicitar Modificación
+                    </a>
+                {% elif v.status == 'approved' %}
+                    <a href="{{ url_for('vacation_suspend_form', vacation_id=v.id) }}" class="text-red-600 hover:text-red-900">
+                      Solicitar Suspensión
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">Ver Detalles</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes finalizadas.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
     <style>
       .tab-button {
         padding: 0.5rem 1rem;
-        border-bottom: 2px solid transparent;
-        color: #6b7280;
-        font-weight: 500;
         cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border-bottom: 2px solid transparent;
+        font-weight: 500;
+        color: #6b7280; /* text-gray-500 */
+      }
+      .tab-button:hover {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border-color: #d1d5db; /* border-gray-300 */
       }
       .tab-button.active-tab {
-        color: #2563eb;
-        border-bottom-color: #2563eb;
+        color: #3b82f6; /* text-blue-600 */
+        border-color: #3b82f6; /* border-blue-600 */
       }
-      .tab-panel { display: none; }
-      .tab-panel.active-panel { display: block; }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active-panel {
+        display: block;
+      }
+      .search-box {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        border: 1px solid #d1d5db; /* border-gray-300 */
+        border-radius: 0.375rem; /* rounded-md */
+        margin-bottom: 1rem;
+      }
+      
+      /* Estilos para ocultar botones de HR al Manager */
+      .manager-action-hide { display: inline-block; }
+      .manager-label-show { display: none; }
     </style>
-    {% endif %}
+  
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // --- Lógica de Pestañas (Tabs) ---
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+  
+        tabButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            // Desactivar todos
+            tabButtons.forEach(btn => btn.classList.remove('active-tab'));
+            tabPanels.forEach(panel => panel.classList.remove('active-panel'));
+            
+            // Activar el clickeado
+            button.classList.add('active-tab');
+            const targetPanel = document.getElementById(button.dataset.target);
+            if (targetPanel) {
+              targetPanel.classList.add('active-panel');
+            }
+          });
+        });
+  
+        // --- Lógica de Búsqueda (Search) ---
+        const searchBoxes = document.querySelectorAll('.search-box');
+        
+        searchBoxes.forEach(box => {
+          box.addEventListener('keyup', () => {
+            const searchTerm = box.value.toLowerCase();
+            const tableId = box.dataset.table;
+            const tableBody = document.getElementById(tableId);
+            
+            if (tableBody) {
+              const rows = tableBody.getElementsByTagName('tr');
+              
+              Array.from(rows).forEach(row => {
+                // Ignorar la fila de "No hay solicitudes"
+                if (row.getElementsByTagName('td').length === 1) {
+                  row.style.display = '';
+                  return;
+                }
+                
+                const rowText = row.textContent.toLowerCase();
+                if (rowText.includes(searchTerm)) {
+                  row.style.display = ''; // Mostrar
+                } else {
+                  row.style.display = 'none'; // Ocultar
+                }
+              });
+            }
+          });
+        });
+      });
+    </script>
+    
+    {% elif user.role == 'hr' or user.role == 'admin' %}
+  
+    <h2 class="text-xl font-semibold mb-4 text-gray-800">Resumen General</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+      
+      <div class="p-4 rounded-lg shadow bg-green-600 text-white">
+        <h3 class="font-bold text-lg">Próximos a Tomar</h3>
+        <p class="text-3xl font-bold">{{ data.upcoming_vacations|length }}</p>
+      </div>
+      
+      <div class="p-4 rounded-lg shadow bg-blue-500 text-white">
+        <h3 class="font-bold text-lg">Pendientes Aprobación</h3>
+        <p class="text-3xl font-bold">{{ data.pending_vacations|length }}</p>
+      </div>
+      
+      <div class="p-4 rounded-lg shadow bg-purple-500 text-white">
+        <h3 class="font-bold text-lg">Pend. Modificación</h3>
+        <p class="text-3xl font-bold">{{ data.pending_modifications|length }}</p>
+      </div>
+      
+      <div class="p-4 rounded-lg shadow bg-red-500 text-white">
+        <h3 class="font-bold text-lg">Pend. Suspensión</h3>
+        <p class="text-3xl font-bold">{{ data.pending_suspensions|length }}</p>
+      </div>
+      
+      <div class_alias="p-4 rounded-lg shadow bg-gray-500 text-white">
+        <h3 class="font-bold text-lg">Histórico (Finalizadas)</h3>
+        <p class="text-3xl font-bold">{{ data.finalized_vacations|length }}</p>
+      </div>
+      
+    </div>
+  
+    <div class="mb-4 flex border-b border-gray-200">
+      <button type="button" class="tab-button active-tab" data-target="panel-proximos">
+        Próximos ({{ data.upcoming_vacations|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-pendientes">
+        Pendientes ({{ data.pending_vacations|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-modificaciones">
+        Modif. ({{ data.pending_modifications|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-suspensiones">
+        Suspen. ({{ data.pending_suspensions|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-borradores">
+        Borradores ({{ data.draft_vacations|length }})
+      </button>
+      <button type="button" class="tab-button" data-target="panel-historico">
+        Histórico ({{ data.finalized_vacations|length }})
+      </button>
+    </div>
+  
+    <div id="panel-proximos" class="tab-panel active-panel">
+      <h2 class="text-xl font-semibold mb-4 text-green-700">Próximos a Tomar Vacaciones (Aprobados)</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-proximos-hr" 
+             placeholder="Buscar en próximos (por usuario, área, fechas...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-green-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-proximos-hr" class="bg-white divide-y divide-gray-200">
+            {% for v in data.upcoming_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                  {{ status_map.get(v.status, v.status) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">Ver Detalles</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay vacaciones próximas a tomar.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <div id="panel-pendientes" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-blue-700">Oficial - Pendientes de Aprobación</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-pendientes-hr" 
+             placeholder="Buscar en pendientes (por usuario, área, fechas...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-blue-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones RRHH</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-pendientes-hr" class="bg-white divide-y divide-gray-200">
+            {% for v in data.pending_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">{{ v.user.full_name or v.user.username }}</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                {% if v.consolidated_doc_path %}
+                  <a href="{{ url_for('uploads', path=v.consolidated_doc_path) }}" target="_blank" class="hover:underline">Descargar Consolidado</a>
+                {% elif v.manager_individual_doc_path %}
+                  <a href="{{ url_for('uploads', path=v.manager_individual_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento Jefe</a>
+                {% elif v.attached_file %}
+                  <a href="{{ url_for('uploads', path=v.attached_file) }}" target="_blank" class="hover:underline">Descargar Adjunto Emp.</a>
+                {% else %} <span class="text-gray-400">N/A</span> {% endif %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_vacation', vacation_id=v.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_vacation', vacation_id=v.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes pendientes de aprobación.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <div id="panel-modificaciones" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-purple-700">Solicitudes de Modificación</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-modificaciones-hr" 
+             placeholder="Buscar en modificaciones (por jefe, empleado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-purple-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jefe</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles Nuevos</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-modificaciones-hr" class="bg-white divide-y divide-gray-200">
+            {% for m in data.pending_modifications %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ m.requesting_user.full_name or m.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=m.vacation_period.id) }}" class="text-blue-600 hover:underline">
+                  {{ m.vacation_period.user.full_name or m.vacation_period.user.username }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <span class="block">Inicio: {{ m.new_start_date }}</span>
+                <span class="block">Días: {{ m.new_period_type }}</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                <a href="{{ url_for('uploads', path=m.attached_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_modification', mod_id=m.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_modification', mod_id=m.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes de modificación pendientes.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="panel-suspensiones" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-red-700">Solicitudes de Suspensión</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-suspensiones-hr" 
+             placeholder="Buscar en suspensiones (por jefe, empleado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-red-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jefe</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-suspensiones-hr" class="bg-white divide-y divide-gray-200">
+            {% for s in data.pending_suspensions %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ s.requesting_user.full_name or s.requesting_user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <a href="{{ url_for('vacation_details', vacation_id=s.vacation_period.id) }}" class="text-blue-600 hover:underline">
+                  {{ s.vacation_period.user.full_name or s.vacation_period.user.username }}
+                </a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{{ s.suspension_type }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {% if s.suspension_type == 'parcial' %}
+                  <span class="block">Nuevo fin: {{ s.new_end_date_parcial }}</span>
+                {% endif %}
+                <span class="block text-xs italic mt-1">Motivo: {{ s.reason_text[:30] }}...</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                <a href="{{ url_for('uploads', path=s.attached_doc_path) }}" target="_blank" class="hover:underline">Descargar Sustento</a>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
+                <form action="{{ url_for('action_approve_suspension', sus_id=s.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-green-600 hover:text-green-900">Aprobar</button>
+                </form>
+                <form action="{{ url_for('action_reject_suspension', sus_id=s.id) }}" method="post" class="inline px-1">
+                  <button type="submit" class="text-red-600 hover:text-red-900">Rechazar</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes de suspensión pendientes.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="panel-borradores" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-yellow-700">No Oficial - Borradores</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-borradores-hr" 
+             placeholder="Buscar en borradores (por usuario, área...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-yellow-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Días</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-borradores-hr" class="bg-white divide-y divide-gray-200">
+            {% for v in data.draft_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.days }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">Ver Detalles</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes en borrador.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <div id="panel-historico" class="tab-panel">
+      <h2 class="text-xl font-semibold mb-4 text-gray-600">Histórico - Finalizadas</h2>
+      
+      <input type="text" class="search-box" data-table="tabla-historico-hr" 
+             placeholder="Buscar en histórico (por usuario, área, estado...)">
+             
+      <div class="overflow-x-auto shadow-md rounded-lg mb-8">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fechas</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-historico-hr" class="bg-white divide-y divide-gray-200">
+            {% for v in data.finalized_vacations %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ v.user.full_name or v.user.username }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.user.area }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ v.start_date }} al {{ v.end_date }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                             {% if v.status == 'approved' %} bg-green-100 text-green-800
+                             {% elif v.status == 'rejected' %} bg-red-100 text-red-800
+                             {% elif v.status == 'suspended' %} bg-gray-500 text-white
+                             {% else %} bg-yellow-100 text-yellow-800 {% endif %}">
+                  {{ status_map.get(v.status, v.status) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                <a href="{{ url_for('vacation_details', vacation_id=v.id) }}" class="text-blue-600 hover:underline">Ver Detalles</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay solicitudes finalizadas.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  
+    <style>
+      .tab-button {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border-bottom: 2px solid transparent;
+        font-weight: 500;
+        color: #6b7280; /* text-gray-500 */
+      }
+      .tab-button:hover {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border-color: #d1d5db; /* border-gray-300 */
+      }
+      .tab-button.active-tab {
+        color: #3b82f6; /* text-blue-600 */
+        border-color: #3b82f6; /* border-blue-600 */
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active-panel {
+        display: block;
+      }
+      .search-box {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        border: 1px solid #d1d5db; /* border-gray-300 */
+        border-radius: 0.375rem; /* rounded-md */
+        margin-bottom: 1rem;
+      }
+      
+      /* Estilos para ocultar botones de HR al Manager */
+      {% if user.role == 'manager' %}
+      .manager-action-hide { display: none; }
+      .manager-label-show { display: inline-block; }
+      {% else %}
+      .manager-action-hide { display: inline-block; }
+      .manager-label-show { display: none; }
+      {% endif %}
+    </style>
+  
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // --- Lógica de Pestañas (Tabs) ---
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+  
+        tabButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            // Desactivar todos
+            tabButtons.forEach(btn => btn.classList.remove('active-tab'));
+            tabPanels.forEach(panel => panel.classList.remove('active-panel'));
+            
+            // Activar el clickeado
+            button.classList.add('active-tab');
+            const targetPanel = document.getElementById(button.dataset.target);
+            if (targetPanel) {
+              targetPanel.classList.add('active-panel');
+            }
+          });
+        });
+  
+        // --- Lógica de Búsqueda (Search) ---
+        const searchBoxes = document.querySelectorAll('.search-box');
+        
+        searchBoxes.forEach(box => {
+          box.addEventListener('keyup', () => {
+            const searchTerm = box.value.toLowerCase();
+            const tableId = box.dataset.table;
+            const tableBody = document.getElementById(tableId);
+            
+            if (tableBody) {
+              const rows = tableBody.getElementsByTagName('tr');
+              
+              Array.from(rows).forEach(row => {
+                // Ignorar la fila de "No hay solicitudes"
+                if (row.getElementsByTagName('td').length === 1) {
+                  row.style.display = '';
+                  return;
+                }
+                
+                const rowText = row.textContent.toLowerCase();
+                if (rowText.includes(searchTerm)) {
+                  row.style.display = ''; // Mostrar
+                } else {
+                  row.style.display = 'none'; // Ocultar
+                }
+              });
+            }
+          });
+        });
+      });
+    </script>
+  
+  {% endif %}
 {% endblock %}

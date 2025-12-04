@@ -151,7 +151,7 @@ async def create_vacation(
     start_date: str = Form(...), 
     period_type: int = Form(...), 
     target_user_id: Optional[int] = Form(None),
-    file: UploadFile = File(None), # <-- YA ES OPCIONAL AQUÍ, ESTÁ BIEN
+    file: UploadFile = File(None), 
     current=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
