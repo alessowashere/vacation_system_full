@@ -208,21 +208,27 @@ def update_vacation_status(db: Session, vacation: models.VacationPeriod, new_sta
 def check_edit_permission(vacation: models.VacationPeriod, user: models.User):
     """
     Verifica si el usuario actual tiene permiso para editar una solicitud (Borrador).
+    CORREGIDO: Usa IDs y jerarquía en vez de nombres de áreas.
     """
-    if not vacation: return False
+    # 1. Si no existe la vacación o no es borrador, nadie puede editar
+    if not vacation: 
+        return False
+    if vacation.status != 'draft': 
+        return False
     
-    # Solo se pueden editar borradores
-    if vacation.status != 'draft': return False
+    # 2. Admin y RRHH tienen permiso universal
+    if user.role in ['admin', 'hr']: 
+        return True
     
-    # 1. Admin y RRHH siempre pueden
-    if user.role in ['admin', 'hr']: return True
+    # 3. El DUEÑO de la solicitud SIEMPRE puede editarla (sea Manager o Empleado)
+    # (Antes fallaba porque preguntaba si user.role == 'employee')
+    if user.id == vacation.user_id: 
+        return True
     
-    # 2. El DUEÑO de la solicitud siempre puede (sea empleado o manager)
-    if user.id == vacation.user_id: return True
-    
-    # 3. El JEFE DIRECTO siempre puede editar las de sus subordinados
-    # (Usamos manager_id para asegurar que funcione aunque el nombre del área varíe)
-    if user.role == 'manager' and vacation.user.manager_id == user.id: return True
+    # 4. El JEFE DIRECTO puede editar las de sus subordinados
+    # (Antes fallaba porque comparaba user.area == vacation.user.area)
+    if user.role == 'manager' and vacation.user.manager_id == user.id: 
+        return True
     
     return False
 
@@ -266,11 +272,13 @@ def update_vacation_details(
         raise Exception(f"Error inesperado: {str(e)}")
 
 def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User):
-    # CORRECCIÓN: Usar manager_id en vez de area.
-    # Esto garantiza que se envíen TODOS los borradores que ves en tu dashboard,
-    # sin importar si el nombre del área tiene un espacio extra o diferencia de texto.
+    """
+    Envía todos los borradores de los subordinados del 'actor' (Manager) a RRHH.
+    CORREGIDO: Filtra por manager_id, no por nombre de área.
+    """
+    # Buscamos vacaciones que sean 'draft' Y cuyo usuario tenga como jefe al 'actor' actual
     vacations_to_update = db.query(models.VacationPeriod).join(models.User).filter(
-        models.User.manager_id == actor.id,  # <--- Filtramos por tus subordinados reales
+        models.User.manager_id == actor.id,  # <--- ESTA ES LA CLAVE
         models.VacationPeriod.status == 'draft'
     ).all()
 
@@ -279,7 +287,7 @@ def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User
 
     for v in vacations_to_update:
         v.status = "pending_hr"
-        # Si el usuario no subió archivo (file_name es None), dejamos el campo como está o nulo
+        # Si se subió archivo, lo guardamos. Si no (file_name es None), no tocamos el campo.
         if file_name:
             v.consolidated_doc_path = file_name
             

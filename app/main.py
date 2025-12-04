@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import Optional
 from app.utils.email import send_email_async
-
+from app.routers import admin as admin_router
+from app.routers import actions as actions_router
+from app.routers import reports as reports_router
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 
@@ -424,3 +426,7 @@ app.include_router(api_router, prefix="/api")
 
 app.include_router(admin_router.router)
 app.include_router(actions_router.router)
+app.include_router(api_router, prefix="/api")
+app.include_router(admin_router.router)
+app.include_router(actions_router.router)
+app.include_router(reports_router.router)

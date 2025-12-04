@@ -11,30 +11,50 @@
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <a href="{{ url_for('admin_feriados') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+    <a href="{{ url_for('admin_feriados') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100 transition">
       <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
-        Gestionar Feriados
+        🗓️ Gestionar Feriados
       </h5>
-      <p class="font-normal text-gray-700">
-        Añadir, editar o eliminar los feriados nacionales y específicos.
+      <p class="font-normal text-gray-700 text-sm">
+        Añadir, editar o eliminar los feriados nacionales y específicos por sede.
       </p>
     </a>
     
-    <a href="{{ url_for('admin_ajustes') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+    <a href="{{ url_for('admin_ajustes') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100 transition">
       <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
-        Ajustes del Sistema
+        ⚙️ Ajustes del Sistema
       </h5>
-      <p class="font-normal text-gray-700">
-        Configurar las reglas de negocio (cálculo de fechas, extensiones, etc.).
+      <p class="font-normal text-gray-700 text-sm">
+        Configurar las reglas de negocio, políticas de regímenes y restricciones.
       </p>
     </a>
-    <a href="{{ url_for('admin_user_list') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100">
+
+    <a href="{{ url_for('admin_user_list') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100 transition">
       <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
-        Gestión de Usuarios
+        👥 Gestión de Usuarios
       </h5>
-      <p class="font-normal text-gray-700">
-        Crear, editar y restablecer contraseñas de usuarios.
+      <p class="font-normal text-gray-700 text-sm">
+        Crear empleados, asignar jefes, editar roles y restablecer contraseñas.
       </p>
     </a>
-    </div>
+
+    <a href="{{ url_for('admin_reports_view') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-50 border-l-4 border-l-green-500 transition">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
+        📊 Reportes y Alertas
+      </h5>
+      <p class="font-normal text-gray-700 text-sm">
+        Descarga reportes Excel (Planificación, Saldos, Histórico) y gestión de alertas.
+      </p>
+    </a>
+    
+    <a href="{{ url_for('admin_org_chart') }}" class="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100 transition">
+      <h5 class="mb-2 text-xl font-bold tracking-tight text-gray-900">
+        🌳 Ver Organigrama
+      </h5>
+      <p class="font-normal text-gray-700 text-sm">
+        Visualizar la estructura jerárquica de la organización.
+      </p>
+    </a>
+
+  </div>
 {% endblock %}
