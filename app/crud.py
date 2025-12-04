@@ -86,13 +86,28 @@ def create_vacation(
     
     try:
         sd = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        calculation = calculator.calculate_end_date(sd, type_period)
         
+        # 2. Calcular fechas
+        calculation = calculator.calculate_end_date(sd, type_period)
+        final_start = calculation["start_date"]
+        final_end = calculation["end_date"]
+        real_days = calculation["days_consumed"]
+
+        # --- NUEVO: 3. VALIDAR SOLAPAMIENTO (DUPLICADOS) ---
+        is_valid, error_msg = calculator.check_overlap(final_start, final_end)
+        if not is_valid:
+            raise ValueError(error_msg) # Esto detendrá el guardado
+        # ---------------------------------------------------
+
+        # 4. Validar Saldo Real (con los días ajustados por viernes si aplica)
+        if real_days > remaining_balance:
+             raise ValueError(f"Saldo insuficiente. La solicitud requiere {real_days} días (incluye ajustes), tienes {remaining_balance}.")
+
         vp = models.VacationPeriod(
             user_id=user.id,
-            start_date=calculation["start_date"],
-            end_date=calculation["end_date"],
-            days=calculation["days_consumed"],
+            start_date=final_start,
+            end_date=final_end,
+            days=real_days,
             type_period=type_period,
             attached_file=file_name
         )
@@ -105,7 +120,7 @@ def create_vacation(
         return vp
         
     except ValueError as e:
-        raise Exception(f"Error: {str(e)}")
+        raise Exception(f"Error: {str(e)}") # Esto mostrará el mensaje en la alerta roja
     except Exception as e:
         raise Exception(f"Error inesperado: {str(e)}")
 

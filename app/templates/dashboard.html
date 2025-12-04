@@ -508,12 +508,13 @@
                 
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha Inicio</label>
-                    <input type="date" name="start_date" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                    <input type="date" name="start_date" id="modal_start_date" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
                 </div>
                 
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Periodo (Días)</label>
-                    <select name="period_type" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                    <select name="period_type" id="modal_period_type" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        <option value="">Seleccionar...</option>
                         <option value="30">30 días</option>
                         <option value="15">15 días</option>
                         <option value="8">8 días</option>
@@ -521,6 +522,10 @@
                     </select>
                 </div>
 
+                <div id="modal_calc_result" class="mb-4 hidden p-3 rounded-lg text-sm border">
+                    <p class="font-bold" id="modal_end_date_text"></p>
+                    <p class="text-xs mt-1" id="modal_warning_text"></p>
+                </div>
                 <div class="mb-6">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Documento (Opcional en Borrador)</label>
                     <input type="file" name="file" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
@@ -528,7 +533,7 @@
 
                 <div class="flex justify-end gap-3 pt-2 border-t border-gray-100">
                     <button type="button" onclick="closeAssignModal()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 shadow-md transition">Crear Solicitud</button>
+                    <button type="submit" id="btn_crear_solicitud" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed">Crear Solicitud</button>
                 </div>
             </form>
         </div>
@@ -562,6 +567,12 @@
             modal.classList.remove('hidden');
             document.getElementById('modalTargetId').value = userId;
             document.getElementById('modalEmployeeName').textContent = userName;
+            
+            // Limpiar campos al abrir
+            document.getElementById('modal_start_date').value = '';
+            document.getElementById('modal_period_type').value = '';
+            document.getElementById('modal_calc_result').classList.add('hidden');
+            document.getElementById('btn_crear_solicitud').disabled = false;
         }
     }
 
@@ -575,7 +586,79 @@
         if (event.target == modal) closeAssignModal();
     }
 
-    // LÓGICA DE TABS Y BÚSQUEDA (Común)
+    // --- NUEVO: CÁLCULO EN VIVO EN EL MODAL ---
+    const mStartDate = document.getElementById('modal_start_date');
+    const mPeriodType = document.getElementById('modal_period_type');
+    const mResultDiv = document.getElementById('modal_calc_result');
+    const mEndDateText = document.getElementById('modal_end_date_text');
+    const mWarningText = document.getElementById('modal_warning_text');
+    const mSubmitBtn = document.getElementById('btn_crear_solicitud');
+    const mTargetUser = document.getElementById('modalTargetId'); // ID del empleado
+
+    async function updateModalCalculations() {
+        const startDate = mStartDate.value;
+        const periodType = mPeriodType.value;
+        const targetUserId = mTargetUser.value;
+
+        if (!startDate || !periodType) {
+            mResultDiv.classList.add('hidden');
+            mSubmitBtn.disabled = false; // Permitimos enviar (el backend validará campos vacíos)
+            return;
+        }
+
+        // Deshabilitar botón mientras calcula
+        mSubmitBtn.disabled = true;
+        mEndDateText.textContent = "Calculando...";
+        mResultDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-gray-100 text-gray-600 block';
+        mWarningText.textContent = "";
+
+        try {
+            const response = await fetch('/gestion/api/calculate-end-date', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_date: startDate,
+                    period_type: parseInt(periodType),
+                    target_user_id: parseInt(targetUserId) // Enviamos el ID del empleado para validar sus políticas
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // ÉXITO
+                mEndDateText.textContent = `Fin del periodo: ${data.end_date}`;
+                mResultDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-blue-50 border-blue-200 text-blue-700 block';
+                mSubmitBtn.disabled = false;
+
+                if (data.warning) {
+                    mWarningText.textContent = "⚠️ " + data.warning;
+                    mResultDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-yellow-50 border-yellow-200 text-yellow-800 block';
+                } else {
+                    mWarningText.textContent = "";
+                }
+            } else {
+                // ERROR (Fecha inválida, feriado, etc.)
+                mEndDateText.textContent = "❌ Fecha no válida";
+                mWarningText.textContent = data.error;
+                mResultDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-red-50 border-red-200 text-red-700 block';
+                mSubmitBtn.disabled = true; // Impedimos enviar si hay error
+            }
+
+        } catch (error) {
+            console.error(error);
+            mEndDateText.textContent = "Error de conexión";
+            mResultDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-red-50 border-red-200 text-red-700 block';
+        }
+    }
+
+    if(mStartDate && mPeriodType) {
+        mStartDate.addEventListener('change', updateModalCalculations);
+        mPeriodType.addEventListener('change', updateModalCalculations);
+    }
+    // ------------------------------------------
+
+    // LÓGICA DE TABS Y BÚSQUEDA (Existente)
     document.addEventListener('DOMContentLoaded', function() {
         // Tabs
         const tabButtons = document.querySelectorAll('.tab-button');
@@ -589,7 +672,7 @@
                 });
                 tabPanels.forEach(panel => panel.classList.remove('active-panel'));
                 
-                // Color activo dinámico según rol/tab
+                // Color activo dinámico
                 if (button.dataset.target === 'admin-pendientes') {
                     button.classList.add('active-tab', 'text-red-600', 'border-red-600');
                 } else {

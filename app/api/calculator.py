@@ -1,12 +1,10 @@
 # app/api/calculator.py
-# (VERSIÓN ACTUALIZADA)
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from datetime import date
 from sqlalchemy.orm import Session
 
-from app import crud, models
+from app import crud
 from app.auth import get_current_user
 from app.db import SessionLocal
 from app.logic.vacation_calculator import VacationCalculator
@@ -23,7 +21,7 @@ def get_db():
 class DateCalculationRequest(BaseModel):
     start_date: date
     period_type: int
-    target_user_id: int = None # Opcional, para cuando un jefe calcula para otro
+    target_user_id: int = None 
 
 @router.post("/calculate-end-date", name="api_calculate_end_date")
 def calculate_end_date_api(
@@ -31,45 +29,55 @@ def calculate_end_date_api(
     current=Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
-    calculator = VacationCalculator(db)
-    
-    # Determinar para qué usuario estamos calculando
+    # Determinar usuario objetivo (si es un jefe asignando a otro)
     target_user = current
     if calc_request.target_user_id:
-        # (Aquí podrías añadir validación de permisos si fuera crítico)
-        found_user = crud.get_user_by_id(db, calc_request.target_user_id)
-        if found_user:
-            target_user = found_user
+        found = crud.get_user_by_id(db, calc_request.target_user_id)
+        if found: target_user = found
+            
+    calculator = VacationCalculator(db, target_user)
 
     try:
-        # 1. Validar Reglas de Políticas (Meses permitidos)
-        allowed, msg = calculator.validate_policy_dates(target_user, calc_request.start_date)
-        if not allowed:
-            return {"success": False, "error": msg}
+        # 1. Validar Fecha Inicio (Fin de semana / Feriado)
+        valid_start, msg_start = calculator.validate_start_date(calc_request.start_date)
+        if not valid_start:
+            return {"success": False, "error": msg_start}
 
-        # 2. Validar Reglas de Calendario (Fines de semana/Feriados)
-        if not calculator.validate_start_date(calc_request.start_date):
-            raise ValueError("La fecha de inicio no es válida (es fin de semana o feriado).")
+        # 2. Validar Políticas (Meses permitidos)
+        valid_policy, msg_policy = calculator.validate_policy_dates(target_user, calc_request.start_date)
+        if not valid_policy:
+            return {"success": False, "error": msg_policy}
 
-        # 3. Calcular
+        # 3. Calcular Fin y aplicar reglas de negocio (Viernes, Puentes, Periodos válidos)
         calculation = calculator.calculate_end_date(
             calc_request.start_date, 
             calc_request.period_type
         )
         
+        # --- NUEVO: Validar Overlap ---
+        valid_overlap, msg_overlap = calculator.check_overlap(
+            calculation["start_date"], 
+            calculation["end_date"]
+        )
+        
+        if not valid_overlap:
+            # Si hay cruce, devolvemos error (Rojo en el modal)
+            return {"success": False, "error": msg_overlap}
+        
         end_date = calculation["end_date"]
-        warning_message = None
-
-        if calculator.settings["FRIDAY_EXTENDS"] and end_date.weekday() == 6: 
-             warning_message = f"Observación: El periodo termina en viernes, por lo que se extiende hasta el {end_date} (Domingo)."
+        msgs = calculation.get("messages", [])
+        
+        # Unir mensajes de advertencia/beneficio
+        warning_text = " / ".join(calculation.get("messages", [])) if calculation.get("messages") else None
         
         return {
             "success": True,
-            "end_date": end_date.strftime("%Y-%m-%d"),
-            "warning": warning_message
+            "end_date": calculation["end_date"].strftime("%Y-%m-%d"),
+            "warning": warning_text
         }
 
     except ValueError as e:
+        # Errores de validación de negocio (ej. terminar antes de feriado)
         return {"success": False, "error": str(e)}
     except Exception as e:
         return {"success": False, "error": f"Error inesperado: {str(e)}"}

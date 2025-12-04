@@ -38,26 +38,48 @@ def delete_vacation(
 
 # En app/routers/actions.py
 
+# En app/routers/actions.py
+
 @router.post("/submit_area_to_hr", name="action_submit_area_to_hr")
 async def submit_area_to_hr(
     request: Request,
-    file: UploadFile = File(None), # <--- CAMBIO: File(None) hace que sea opcional
+    file: UploadFile = File(None),
     current=Depends(get_current_manager_user),
     db: Session = Depends(get_db)
 ):
     uploads_dir = "uploads"
-    file_name = None # Por defecto es None
+    file_name = None 
 
-    # Solo procesamos el archivo si el usuario subió uno
     if file and file.filename:
+        # (Aquí iría la validación de tipo sugerida arriba)
         os.makedirs(uploads_dir, exist_ok=True)
         file_name = f"CONSOLIDADO_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
         file_disk_path = os.path.join(uploads_dir, file_name)
-        
         with open(file_disk_path, "wb") as f:
             f.write(await file.read())
         
+    # Ejecutar la lógica de BD
     crud.submit_area_to_hr(db, area=current.area, file_name=file_name, actor=current)
+    
+    # --- NUEVO: ENVIAR CORREO A RRHH ---
+    hr_emails = get_hr_emails(db)
+    if hr_emails:
+        adjunto_txt = "Se ha adjuntado documento consolidado." if file_name else "Sin documento consolidado."
+        await send_email_async(
+            subject=f"📦 Lote de Solicitudes Enviado: Equipo de {current.full_name}",
+            email_to=hr_emails,
+            body=f"""
+            <div style="font-family: sans-serif;">
+                <h3 style="color: #2980b9;">Nuevo Lote de Solicitudes</h3>
+                <p>El Jefe <b>{current.full_name}</b> ha enviado un lote de solicitudes de su equipo para revisión.</p>
+                <p><b>Estado:</b> Pendiente RRHH</p>
+                <p>{adjunto_txt}</p>
+                <hr>
+                <p>Por favor ingrese al sistema para procesarlas.</p>
+            </div>
+            """
+        )
+    # -----------------------------------
     
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
