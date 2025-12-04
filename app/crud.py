@@ -206,11 +206,24 @@ def update_vacation_status(db: Session, vacation: models.VacationPeriod, new_sta
     return vacation
 
 def check_edit_permission(vacation: models.VacationPeriod, user: models.User):
+    """
+    Verifica si el usuario actual tiene permiso para editar una solicitud (Borrador).
+    """
     if not vacation: return False
+    
+    # Solo se pueden editar borradores
     if vacation.status != 'draft': return False
+    
+    # 1. Admin y RRHH siempre pueden
     if user.role in ['admin', 'hr']: return True
-    if user.role == 'manager' and user.area == vacation.user.area: return True
-    if user.role == 'employee' and user.id == vacation.user_id: return True
+    
+    # 2. El DUEÑO de la solicitud siempre puede (sea empleado o manager)
+    if user.id == vacation.user_id: return True
+    
+    # 3. El JEFE DIRECTO siempre puede editar las de sus subordinados
+    # (Usamos manager_id para asegurar que funcione aunque el nombre del área varíe)
+    if user.role == 'manager' and vacation.user.manager_id == user.id: return True
+    
     return False
 
 def update_vacation_details(
@@ -253,8 +266,11 @@ def update_vacation_details(
         raise Exception(f"Error inesperado: {str(e)}")
 
 def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User):
+    # CORRECCIÓN: Usar manager_id en vez de area.
+    # Esto garantiza que se envíen TODOS los borradores que ves en tu dashboard,
+    # sin importar si el nombre del área tiene un espacio extra o diferencia de texto.
     vacations_to_update = db.query(models.VacationPeriod).join(models.User).filter(
-        models.User.area == area,
+        models.User.manager_id == actor.id,  # <--- Filtramos por tus subordinados reales
         models.VacationPeriod.status == 'draft'
     ).all()
 
@@ -263,8 +279,11 @@ def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User
 
     for v in vacations_to_update:
         v.status = "pending_hr"
-        v.consolidated_doc_path = file_name
-        create_vacation_log(db, v, actor, f"Enviado a RRHH con documento consolidado.")
+        # Si el usuario no subió archivo (file_name es None), dejamos el campo como está o nulo
+        if file_name:
+            v.consolidated_doc_path = file_name
+            
+        create_vacation_log(db, v, actor, f"Enviado a RRHH en lote por el jefe.")
     
     db.commit()
 
