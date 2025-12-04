@@ -1,9 +1,13 @@
 # app/main.py
-# (VERSIÓN ACTUALIZADA CON ASIGNACIÓN POR JEFE)
+# (VERSIÓN ACTUALIZADA - QUERY EXPLÍCITA EN DASHBOARD)
 
 import os
 from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
+from app.routers import admin as admin_router
+from app.routers import actions as actions_router
+from app.routers import reports as reports_router # <-- IMPORTAR
 from fastapi.responses import HTMLResponse, RedirectResponse
+from app.routers import reports as reports_router
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
@@ -13,8 +17,8 @@ from app.auth import get_current_user, create_access_token, get_current_manager_
 from app.db import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
-from typing import Optional # <-- IMPORTANTE AÑADIR ESTO
-from app.utils.email import send_email_async # <-- Asegúrate de importar esto
+from typing import Optional
+from app.utils.email import send_email_async
 
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
@@ -40,6 +44,8 @@ os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.state.oauth = oauth
+app.include_router(reports_router.router)
+
 
 # --- RUTAS DE AUTENTICACIÓN ---
 @app.get("/", response_class=HTMLResponse, name="home")
@@ -108,6 +114,20 @@ def dashboard(
     tmpl = templates.get_template("dashboard.html")
     data = crud.get_dashboard_data(db, user)
     
+    # --- LOGICA NUEVA PARA MANAGER: Obtener equipo con saldos (CORREGIDA) ---
+    my_team_data = []
+    if user.role == 'manager':
+        # USAMOS CONSULTA EXPLÍCITA PARA EVITAR PROBLEMAS DE LAZY LOADING
+        subs = crud.get_users_by_manager(db, user.id)
+        
+        for sub in subs:
+            balance = crud.get_user_vacation_balance(db, sub)
+            my_team_data.append({
+                "user": sub,
+                "balance": balance
+            })
+    # ------------------------------------------------------------
+
     error_msg = None
     error_type = request.query_params.get("error")
     if error_type:
@@ -117,6 +137,7 @@ def dashboard(
         "request": request, 
         "user": user, 
         "data": data,
+        "my_team_data": my_team_data, 
         "error_msg": error_msg 
     })
 
@@ -128,21 +149,19 @@ def new_vacation_form(
 ):
     remaining_balance = crud.get_user_vacation_balance(db, current)
     
-    # --- LOGICA PARA MOSTRAR EMPLEADOS A JEFES/ADMINS ---
     employees = []
     if current.role in ['admin', 'hr']:
         employees = crud.get_all_users(db)
     elif current.role == 'manager':
-        # El manager solo ve a sus subordinados
-        employees = current.subordinates 
-    # ----------------------------------------------------
+        # Aquí también usamos la consulta explícita por seguridad
+        employees = crud.get_users_by_manager(db, current.id)
 
     tmpl = templates.get_template("vacation_new.html")
     return tmpl.render({
         "request": request, 
         "user": current,
         "remaining_balance": remaining_balance,
-        "employees": employees  # Pasamos la lista a la plantilla
+        "employees": employees
     })
 
 @app.post("/vacations", name="vacation_create")
@@ -155,15 +174,10 @@ async def create_vacation(
     current=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    
-    # Por defecto, la vacación es para quien la crea
     user_to_create_for = current
 
-    # --- LOGICA DE ASIGNACIÓN ---
     if target_user_id:
-        # Validar permisos
         if current.role == 'employee':
-             # Un empleado normal no puede asignar a otros
              error_url = str(request.url_for('dashboard')) + "?error=auth&msg=No tienes permiso para asignar vacaciones a otros."
              return RedirectResponse(url=error_url, status_code=302)
         
@@ -173,14 +187,11 @@ async def create_vacation(
              return RedirectResponse(url=error_url, status_code=302)
 
         if current.role == 'manager':
-            # Verificar que el target_user sea realmente subordinado de este manager
             if target_user.manager_id != current.id:
                  error_url = str(request.url_for('dashboard')) + "?error=auth&msg=Este usuario no es tu subordinado."
                  return RedirectResponse(url=error_url, status_code=302)
         
-        # Si pasa las validaciones, cambiamos el usuario objetivo
         user_to_create_for = target_user
-    # ----------------------------
 
     file_path_in_db = None
     if file and file.filename: 
@@ -196,9 +207,10 @@ async def create_vacation(
         
         if user_to_create_for.id != current.id:
             crud.create_vacation_log(db, vp, current, f"Solicitud creada por el jefe/admin: {current.username}")
+        
         manager = user_to_create_for.manager
         if manager and manager.email:
-            approval_link = str(request.url_for('login_page')) # O link directo al dashboard
+            approval_link = str(request.url_for('login_page'))
             
             await send_email_async(
                 subject=f"NUEVA SOLICITUD DE VACACIONES - {user_to_create_for.full_name}",
@@ -242,12 +254,8 @@ def modify_vacation_form(
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     
-    # --- CORRECCIÓN AQUÍ ---
-    # Antes: if vacation.user.area != current.area:
-    # Ahora verificamos si es Admin O si es el Jefe directo
     if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado: No eres el jefe directo de este usuario.")
-    # -----------------------
 
     if vacation.status != 'rejected':
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
@@ -271,10 +279,8 @@ def submit_individual_form(
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     
-    # --- CORRECCIÓN AQUÍ ---
     if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado: No eres el jefe directo.")
-    # -----------------------
 
     if vacation.status != 'draft':
         return RedirectResponse(url=request.url_for('dashboard'), status_code=302)
@@ -404,10 +410,8 @@ def suspend_vacation_form(
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     
-    # --- CORRECCIÓN AQUÍ ---
     if current.role != 'admin' and vacation.user.manager_id != current.id:
         raise HTTPException(status_code=403, detail="No autorizado")
-    # -----------------------
 
     if vacation.status != 'approved':
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg=Solo se pueden suspender solicitudes APROBADAS."
@@ -426,3 +430,4 @@ app.include_router(api_router, prefix="/api")
 
 app.include_router(admin_router.router)
 app.include_router(actions_router.router)
+app.include_router(reports_router.router) # <-- INCLUIR
