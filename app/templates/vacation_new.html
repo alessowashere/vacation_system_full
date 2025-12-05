@@ -6,30 +6,21 @@
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Nueva Solicitud de Vacaciones</h1>
     <div class="text-right">
-      <span class="text-sm text-gray-500 block">Tu Balance Propio:</span>
+      <span class="text-sm text-gray-500 block">Tu Balance Disponible:</span>
       <span class="text-lg font-bold text-green-600 block">{{ remaining_balance }} días</span>
       <a href="{{ url_for('dashboard') }}" class="text-blue-500 hover:underline text-sm">&larr; Volver al Dashboard</a>
     </div>
   </div>
   
-  <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto">
+  <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md border border-gray-100">
     
-    {# --- NUEVO CAMPO: SELECTOR DE EMPLEADO (SOLO SI CORRESPONDE) --- #}
-    {% if employees %}
-    <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-md">
-      <label for="target_user_id" class="block text-sm font-bold text-indigo-700 mb-1">Solicitar para:</label>
-      <select name="target_user_id" id="target_user_id" class="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-        <option value="">-- Para mí mismo ({{ user.username }}) --</option>
-        {% for emp in employees %}
-          <option value="{{ emp.id }}">
-            {{ emp.full_name or emp.username }} ({{ emp.vacation_days_total }} días totales)
-          </option>
-        {% endfor %}
-      </select>
-      <p class="text-xs text-indigo-500 mt-1">Como jefe/admin, puedes crear esta solicitud a nombre de otro empleado.</p>
+    {# --- CAMBIO: SIEMPRE ES PARA EL USUARIO LOGUEADO (AUTO-SERVICIO) --- #}
+    <input type="hidden" name="target_user_id" value="{{ user.id }}">
+    
+    <div class="mb-6 p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-blue-900 text-sm">
+        <strong>Solicitante:</strong> {{ user.full_name or user.username }}
     </div>
-    {% endif %}
-    {# -------------------------------------------------------------- #}
+    {# ------------------------------------------------------------------ #}
 
     <div class="mb-4">
       <label for="start_date" class="block text-sm font-medium text-gray-700">Fecha de Inicio:</label>
@@ -50,8 +41,9 @@
     </div>
 
     <div class="mb-4 p-4 bg-gray-50 rounded-lg hidden" id="calc_result_wrapper">
-      <label class="block text-sm font-medium text-gray-700">Fecha de Fin Calculada:</label>
+      <label class="block text-sm font-medium text-gray-700">Fecha de Fin (Calculada):</label>
       <span class="text-xl font-bold text-blue-600" id="calc_end_date"></span>
+      <p class="text-xs text-gray-500 mt-1">El sistema calcula automáticamente fines de semana y feriados.</p>
     </div>
 
     <div class="mb-4 p-4 rounded-lg hidden" id="calc_warning_wrapper">
@@ -104,23 +96,24 @@
         if (data.success) {
           endDateDisplay.textContent = data.end_date;
           resultWrapper.classList.remove('hidden');
+          
           if (data.warning) {
             warningText.textContent = data.warning;
             warningWrapper.classList.remove('hidden');
-            warningWrapper.className = 'mb-4 p-4 rounded-lg bg-blue-100 border-blue-500 text-blue-700';
+            warningWrapper.className = 'mb-4 p-4 rounded-lg bg-yellow-50 border-yellow-500 text-yellow-700 border';
           } else {
             warningWrapper.classList.add('hidden');
           }
         } else {
           warningText.textContent = data.error;
           warningWrapper.classList.remove('hidden');
-          warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700';
+          warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
           resultWrapper.classList.add('hidden');
         }
       } catch (error) {
         warningText.textContent = 'No se pudo calcular la fecha. Revise su conexión.';
         warningWrapper.classList.remove('hidden');
-        warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700';
+        warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
       }
     }
 

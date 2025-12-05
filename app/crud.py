@@ -353,9 +353,22 @@ def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor:
 
 def delete_vacation_period(db: Session, vacation_id: int):
     db_vacation = get_vacation_by_id(db, vacation_id)
+    
+    # Verificamos que exista y que esté en estado 'draft'
     if db_vacation and db_vacation.status == 'draft':
+        # 1. Eliminar Logs (Historial) asociados a esta vacación
+        # Esto soluciona el error de "Foreign Key Constraint"
+        db.query(models.VacationLog).filter(models.VacationLog.vacation_period_id == vacation_id).delete()
+        
+        # 2. Por seguridad, eliminar también posibles solicitudes de modificación/suspensión huérfanas
+        # (Aunque en estado 'draft' no deberían existir, es mejor prevenir)
+        db.query(models.ModificationRequest).filter(models.ModificationRequest.vacation_period_id == vacation_id).delete()
+        db.query(models.SuspensionRequest).filter(models.SuspensionRequest.vacation_period_id == vacation_id).delete()
+
+        # 3. Finalmente, eliminar la vacación
         db.delete(db_vacation)
         db.commit()
+        
     return db_vacation
 
 def get_holiday(db: Session, holiday_id: int):

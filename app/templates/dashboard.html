@@ -38,7 +38,7 @@
       
       {% if user.role == 'employee' or (user.role == 'manager' and user.can_request_own_vacation) %}
         <a href="{{ url_for('vacation_new_form') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm transition shadow-sm">
-            + Nueva Solicitud
+            + Solicitud Propia
         </a>
       {% endif %}
       
