@@ -102,9 +102,9 @@ async def submit_area_to_hr(
     return RedirectResponse(
         url=request.url_for('dashboard') + "?success_msg=Lote enviado a RRHH correctamente.",
         status_code=303
-    )
+    )   
 
-@router.post("/vacation/{vacation_id}/submit_individual", name="action_submit_individual")
+@router.post("/vacation/{vacation_id}/submit_individual", name="submit_individual_vacation")
 async def submit_individual_vacation(
     request: Request,
     vacation_id: int,
