@@ -8,6 +8,7 @@ class VacationCalculator:
         self.db = db
         self.user = user
         self.settings = self.load_settings()
+        # Si tienes usuario, usa su ubicación, si no, por defecto CUSCO
         location = user.location if user else "CUSCO"
         self.holidays = self.load_holidays(location)
 
@@ -24,6 +25,7 @@ class VacationCalculator:
 
     def load_holidays(self, location: str):
         current_year = date.today().year
+        # Cargamos este año y el siguiente para tener margen
         holidays_this_year = crud.get_holidays_by_year(self.db, current_year, location)
         holidays_next_year = crud.get_holidays_by_year(self.db, current_year + 1, location)
         return {h.holiday_date for h in holidays_this_year + holidays_next_year}
@@ -35,10 +37,11 @@ class VacationCalculator:
         return day in self.holidays
 
     def validate_start_date(self, start_date: date):
-
+        # 1. Regla: No fechas pasadas
         if start_date <= date.today():
             return False, "La fecha de inicio debe ser posterior al día de hoy."
-            
+
+        # 2. Reglas de configuración
         if not self.settings["ALLOW_START_ON_WEEKEND"] and self.is_weekend(start_date):
             return False, "No se puede iniciar vacaciones en fin de semana."
         
@@ -47,7 +50,7 @@ class VacationCalculator:
         return True, None
 
     def validate_policy_dates(self, user: models.User, start_date: date):
-        if not user.vacation_policy:
+        if not user or not user.vacation_policy:
             return True, None
             
         policy = user.vacation_policy
@@ -67,7 +70,6 @@ class VacationCalculator:
         """
         Calcula fecha fin y COBRA los días extra si se extiende.
         """
-        
         # 1. Validar Periodos Permitidos
         if period_type not in [7, 8, 15, 30]:
             raise ValueError("El periodo base debe ser de 7, 8, 15 o 30 días.")
@@ -76,13 +78,18 @@ class VacationCalculator:
         days_consumed = period_type
         messages = []
 
+        # --- NUEVA REGLA: ADVERTENCIA DE AÑO FUTURO (2027+) ---
+        if start_date.year > 2026:
+            messages.append(f"⚠️ Advertencia: Estás solicitando para el año {start_date.year}. El sistema tiene cargados los feriados hasta 2026, por lo que el cálculo de días inhábiles podría no ser exacto.")
+        # ------------------------------------------------------
+
         # 2. Regla: Terminó en Viernes -> Extiende y COBRA
         if self.settings["FRIDAY_EXTENDS"] and end_date.weekday() == 4:
             # Extendemos 2 días (Sábado y Domingo) para que regrese el Lunes
             end_date = end_date + timedelta(days=2)
-            days_consumed += 2 # <--- AHORA SÍ DESCUENTA LOS DÍAS
+            days_consumed += 2
             
-            messages.append(f"Aviso: Al terminar en viernes, se extiende al domingo. Se descontarán {days_consumed} días en total (Periodo Irregular).")
+            messages.append(f"Aviso: Al terminar en viernes, se extiende al domingo. Se descontarán {days_consumed} días en total.")
 
         # 3. Regla: Puente Prohibido (Terminar antes de feriado)
         next_day = end_date + timedelta(days=1)
@@ -95,13 +102,12 @@ class VacationCalculator:
             "days_consumed": days_consumed,
             "messages": messages
         }
+
     def check_overlap(self, start_date: date, end_date: date):
         """Verifica si ya existen vacaciones en el rango seleccionado."""
         if not self.user:
-            return True, None # Si no hay usuario, no podemos validar overlaps
+            return True, None 
 
-        # Buscamos cualquier vacación que NO esté rechazada y que se cruce
-        # Lógica de cruce: (InicioA <= FinB) y (FinA >= InicioB)
         overlap = self.db.query(models.VacationPeriod).filter(
             models.VacationPeriod.user_id == self.user.id,
             models.VacationPeriod.status.in_(['draft', 'pending_hr', 'approved', 'pending_modification']),
