@@ -28,9 +28,11 @@ def delete_vacation(
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
 
+    # Al usar esta función, hereda automáticamente el permiso "Manager Autónomo" que definimos arriba
     if crud.check_edit_permission(vacation, current):
         crud.delete_vacation_period(db, vacation_id)
     else:
+        # Opcional: Podrías lanzar un error 403 aquí si prefieres feedback visual
         pass 
 
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)

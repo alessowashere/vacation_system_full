@@ -71,6 +71,21 @@
         </select>
       </div>
       <div>
+        <label for="manager_id" class="block text-sm font-medium text-gray-700">Jefe Directo (Manager):</label>
+        </div>
+
+      <div class="flex items-center mt-6">
+        <input type="checkbox" name="can_request_own_vacation" id="can_request_own_vacation" 
+               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+               {% if user and user.can_request_own_vacation %}checked{% endif %}>
+        <label for="can_request_own_vacation" class="ml-2 block text-sm text-gray-900">
+          Permitir solicitar vacaciones propias (Autonomía)
+        </label>
+      </div>
+      <p class="text-xs text-gray-500 mb-4 ml-6">
+        Marcar solo para jefes intermedios que deben iniciar sus propios trámites.
+      </p>
+      <div>
         <label for="location" class="block text-sm font-medium text-gray-700">Sede / Ubicación:</label>
         <select name="location" id="location" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
           <option value="CUSCO" {% if user and user.location == 'CUSCO' %}selected{% endif %}>Sede Central (Cusco)</option>

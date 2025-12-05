@@ -109,6 +109,7 @@ def dashboard(
     user = current
     tmpl = templates.get_template("dashboard.html")
     data = crud.get_dashboard_data(db, user)
+    current_user_balance = crud.get_user_vacation_balance(db, user)
     
     # --- LOGICA NUEVA PARA MANAGER: Obtener equipo con saldos (CORREGIDA) ---
     my_team_data = []
@@ -134,6 +135,7 @@ def dashboard(
         "user": user, 
         "data": data,
         "my_team_data": my_team_data, 
+        "user_balance": current_user_balance, # <--- PASAR ESTA VARIABLE NUEVA
         "error_msg": error_msg 
     })
 

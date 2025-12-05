@@ -35,6 +35,10 @@ class VacationCalculator:
         return day in self.holidays
 
     def validate_start_date(self, start_date: date):
+
+        if start_date <= date.today():
+            return False, "La fecha de inicio debe ser posterior al día de hoy."
+            
         if not self.settings["ALLOW_START_ON_WEEKEND"] and self.is_weekend(start_date):
             return False, "No se puede iniciar vacaciones en fin de semana."
         

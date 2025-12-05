@@ -146,6 +146,7 @@ def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
 @router.post("/users/new", name="admin_user_create")
 async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    can_request_own_vacation = True if form.get("can_request_own_vacation") else False
     location = form.get("location", "CUSCO")
     username = form.get("username")
     # password = form.get("password") <--- ELIMINAR
@@ -171,7 +172,8 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
         user = crud.create_user(
             username=username, full_name=full_name, email=email,
             role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id,
-            location=location # <-- PASARLO AL CRUD
+            location=location,# <-- PASARLO AL CRUD
+            can_request_own_vacation=can_request_own_vacation # <--- PASAR AL CRUD
         )
         # Actualizar política manualmente si create_user no lo soporta aún
         if vacation_policy_id:
@@ -210,6 +212,7 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
 
     form = await request.form()
     location = form.get("location", "CUSCO") # <-- LEER DEL FORMULARIO
+    can_request_own_vacation = True if form.get("can_request_own_vacation") else False
     username = form.get("username")
     full_name = form.get("full_name")
     email = form.get("email")
@@ -233,7 +236,8 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
         db=db, user=user, username=username, full_name=full_name, email=email,
         role=role, area=area, vacation_days_total=vacation_days_total,
         manager_id=manager_id, vacation_policy_id=vacation_policy_id,
-        location=location # <-- PASARLO AL CRUD
+        location=location, # <-- PASARLO AL CRUD
+        can_request_own_vacation=can_request_own_vacation # <--- PASAR AL CRUD
     )
     
     # CORRECCIÓN AQUÍ: str() alrededor de request.url_for

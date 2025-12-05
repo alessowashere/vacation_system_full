@@ -21,6 +21,7 @@ class User(Base):
     vacation_policy_id = Column(Integer, ForeignKey("vacation_policies.id"), nullable=True)
     vacation_policy = relationship("VacationPolicy")
     location = Column(String(50), default="CUSCO")
+    can_request_own_vacation = Column(Boolean, default=False)
 
 class VacationPolicy(Base):
     __tablename__ = "vacation_policies"
