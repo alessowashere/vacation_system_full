@@ -37,6 +37,10 @@ class VacationCalculator:
         return day in self.holidays
 
     def validate_start_date(self, start_date: date):
+        
+        min_date = date(2026, 1, 1)
+        if start_date < min_date:
+            return False, "El sistema solo admite solicitudes a partir del 01/01/2026."
         # 1. Regla: No fechas pasadas
         if start_date <= date.today():
             return False, "La fecha de inicio debe ser posterior al día de hoy."

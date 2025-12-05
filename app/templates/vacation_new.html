@@ -23,7 +23,7 @@
 
     <div class="mb-4">
       <label for="start_date" class="block text-sm font-medium text-gray-700">Fecha de Inicio:</label>
-      <input type="date" name="start_date" id="start_date" required 
+      <input type="date" name="start_date" id="start_date" required min="2026-01-01"
              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
     </div>
     
@@ -61,26 +61,30 @@
     </button>
   </form>
 
-  <script>
+<script>
     const startDateInput = document.getElementById('start_date');
     const periodTypeInput = document.getElementById('period_type');
-    const targetUserInput = document.getElementById('target_user_id'); // Ahora sí encuentra el elemento por su ID
+    const targetUserInput = document.getElementById('target_user_id');
+
+    // Elementos de UI
     const resultWrapper = document.getElementById('calc_result_wrapper');
     const endDateDisplay = document.getElementById('calc_end_date');
     const warningWrapper = document.getElementById('calc_warning_wrapper');
     const warningText = document.getElementById('calc_warning_text');
+    const submitBtn = document.querySelector('button[type="submit"]');
 
     async function updateCalculations() {
       const startDate = startDateInput.value;
       const periodType = periodTypeInput.value;
-      // Obtenemos el valor correctamente
       const targetUserId = targetUserInput ? targetUserInput.value : null;
 
-      if (!startDate || !periodType) {
-        resultWrapper.classList.add('hidden');
-        warningWrapper.classList.add('hidden');
-        return;
-      }
+      // 1. Resetear y DESHABILITAR botón al inicio
+      resultWrapper.classList.add('hidden');
+      warningWrapper.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      if (!startDate || !periodType) return;
 
       try {
         const response = await fetch('/gestion/api/calculate-end-date', {
@@ -93,29 +97,30 @@
           })
         });
 
-        if (!response.ok) throw new Error('Error en la conexión o validación.');
         const data = await response.json();
 
         if (data.success) {
+          // ÉXITO: Mostrar resultado y HABILITAR botón
           endDateDisplay.textContent = data.end_date;
           resultWrapper.classList.remove('hidden');
-          
+
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
           if (data.warning) {
             warningText.textContent = "⚠️ " + data.warning;
             warningWrapper.classList.remove('hidden');
             warningWrapper.className = 'mb-4 p-4 rounded-lg bg-yellow-50 border-yellow-500 text-yellow-800 border';
-          } else {
-            warningWrapper.classList.add('hidden');
           }
         } else {
+          // ERROR: Mostrar error en rojo (botón sigue deshabilitado)
           warningText.textContent = "❌ " + data.error;
           warningWrapper.classList.remove('hidden');
           warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
-          resultWrapper.classList.add('hidden');
         }
       } catch (error) {
         console.error(error);
-        warningText.textContent = 'No se pudo calcular la fecha. Revise su conexión.';
+        warningText.textContent = 'Error de conexión.';
         warningWrapper.classList.remove('hidden');
         warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
       }
@@ -123,10 +128,5 @@
 
     startDateInput.addEventListener('change', updateCalculations);
     periodTypeInput.addEventListener('change', updateCalculations);
-    
-    // Si el input existe, escuchamos sus cambios (por si acaso se implementa un select dinámico después)
-    if (targetUserInput) {
-        targetUserInput.addEventListener('change', updateCalculations);
-    }
 </script>
 {% endblock %}
