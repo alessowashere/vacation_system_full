@@ -21,7 +21,8 @@ def get_db():
 class DateCalculationRequest(BaseModel):
     start_date: date
     period_type: int
-    target_user_id: int = None 
+    target_user_id: int = None
+    vacation_id: int = None  # <--- NUEVO CAMPO OPCIONAL
 
 @router.post("/calculate-end-date", name="api_calculate_end_date")
 def calculate_end_date_api(
@@ -57,7 +58,8 @@ def calculate_end_date_api(
         # --- NUEVO: Validar Overlap ---
         valid_overlap, msg_overlap = calculator.check_overlap(
             calculation["start_date"], 
-            calculation["end_date"]
+            calculation["end_date"],
+            ignore_vacation_id=calc_request.vacation_id # <--- PASAMOS EL ID
         )
         
         if not valid_overlap:

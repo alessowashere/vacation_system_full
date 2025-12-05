@@ -18,7 +18,7 @@
   </div>
 
   <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md">
-    <p>Estás editando la solicitud de <strong>{{ vacation.user.username }}</strong> 
+    <p>Estás editando la solicitud de <strong>{{ vacation.user.full_name or user.username }}</strong> 
        (Estado actual: <span class="font-bold">{{ status_map.get(vacation.status, vacation.status) }}</span>).
     </p>
     <p>Solo puedes editar la fecha de inicio y el tipo de periodo.</p>
@@ -43,7 +43,15 @@
         <option value="7" {% if vacation.type_period == 7 %}selected{% endif %}>7 días</option>
       </select>
     </div>
+    <div class="mb-4 p-4 bg-gray-50 rounded-lg hidden" id="calc_result_wrapper">
+      <label class="block text-sm font-medium text-gray-700">Fecha de Fin (Calculada):</label>
+      <span class="text-xl font-bold text-blue-600" id="calc_end_date"></span>
+      <p class="text-xs text-gray-500 mt-1">El sistema calcula automáticamente fines de semana y feriados.</p>
+    </div>
 
+    <div class="mb-4 p-4 rounded-lg hidden" id="edit_feedback">
+      <span class="font-medium" id="edit_message"></span>
+    </div>
     <div class="mb-6">
       <label for="file" class="block text-sm font-medium text-gray-700">Reemplazar Documento (Opcional):</label>
       <input type="file" name="file" id="file"
@@ -54,7 +62,6 @@
       </p>
       {% endif %}
     </div>
-    
     <button type="submit" 
             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
       Guardar Cambios
@@ -66,15 +73,14 @@
     const eFeedbackDiv = document.getElementById('edit_feedback');
     const eMessage = document.getElementById('edit_message');
     const eSubmitBtn = document.querySelector('button[type="submit"]');
-
-    // ID del dueño de la vacación para validar sus reglas
+    
     const vacationOwnerId = "{{ vacation.user_id }}";
+    const currentVacationId = "{{ vacation.id }}"; // <--- CAPTURAMOS EL ID ACTUAL
 
     async function validateEdit() {
         const startDate = eStartDate.value;
         const periodType = ePeriodType.value;
 
-        // Resetear UI y DESHABILITAR botón
         eFeedbackDiv.classList.add('hidden');
         eSubmitBtn.disabled = true;
         eSubmitBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -88,7 +94,8 @@
                 body: JSON.stringify({
                     start_date: startDate,
                     period_type: parseInt(periodType),
-                    target_user_id: parseInt(vacationOwnerId)
+                    target_user_id: parseInt(vacationOwnerId),
+                    vacation_id: parseInt(currentVacationId) // <--- LO ENVIAMOS AL BACKEND
                 })
             });
 
@@ -96,19 +103,17 @@
             eFeedbackDiv.classList.remove('hidden');
 
             if (data.success) {
-                // ÉXITO: Habilitar botón
                 eMessage.textContent = `✅ Nuevo fin del periodo: ${data.end_date}`;
                 eFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-green-50 border-green-200 text-green-700';
-
+                
                 if(data.warning) {
-                     eMessage.textContent += ` (⚠️ ${data.warning})`;
-                     eFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-yellow-50 border-yellow-200 text-yellow-800';
+                        eMessage.textContent += ` (⚠️ ${data.warning})`;
+                        eFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-yellow-50 border-yellow-200 text-yellow-800';
                 }
 
                 eSubmitBtn.disabled = false;
                 eSubmitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
-                // ERROR: Mantener deshabilitado
                 eMessage.textContent = `❌ ${data.error}`;
                 eFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-red-50 border-red-200 text-red-700';
             }
@@ -120,8 +125,7 @@
 
     eStartDate.addEventListener('change', validateEdit);
     ePeriodType.addEventListener('change', validateEdit);
-
-    // Validar al cargar la página por si los datos actuales ya son inválidos
+    
     document.addEventListener('DOMContentLoaded', validateEdit);
 </script>
 {% endblock %}

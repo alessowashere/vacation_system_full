@@ -37,7 +37,7 @@ class VacationCalculator:
         return day in self.holidays
 
     def validate_start_date(self, start_date: date):
-        
+
         min_date = date(2026, 1, 1)
         if start_date < min_date:
             return False, "El sistema solo admite solicitudes a partir del 01/01/2026."
@@ -107,17 +107,24 @@ class VacationCalculator:
             "messages": messages
         }
 
-    def check_overlap(self, start_date: date, end_date: date):
-        """Verifica si ya existen vacaciones en el rango seleccionado."""
+    def check_overlap(self, start_date: date, end_date: date, ignore_vacation_id: int = None):
+        """Verifica si ya existen vacaciones en el rango, ignorando una específica si se pide."""
         if not self.user:
             return True, None 
 
-        overlap = self.db.query(models.VacationPeriod).filter(
+        query = self.db.query(models.VacationPeriod).filter(
             models.VacationPeriod.user_id == self.user.id,
             models.VacationPeriod.status.in_(['draft', 'pending_hr', 'approved', 'pending_modification']),
             models.VacationPeriod.start_date <= end_date,
             models.VacationPeriod.end_date >= start_date
-        ).first()
+        )
+
+        # --- CORRECCIÓN: Excluir la vacación actual si estamos editando ---
+        if ignore_vacation_id:
+            query = query.filter(models.VacationPeriod.id != ignore_vacation_id)
+        # ------------------------------------------------------------------
+
+        overlap = query.first()
         
         if overlap:
             return False, f"Cruce de fechas: Ya tienes una solicitud ({overlap.status}) del {overlap.start_date} al {overlap.end_date}."

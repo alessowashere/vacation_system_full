@@ -33,7 +33,7 @@
     
     <div class="mb-4">
       <label for="start_date" class="block text-sm font-medium text-gray-700">Nueva Fecha de Inicio:</label>
-      <input type="date" name="start_date" id="start_date" required 
+      <input type="date" name="start_date" id="start_date" required min="2026-01-01"
              value="{{ vacation.start_date.strftime('%Y-%m-%d') }}"
              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
     </div>
@@ -60,10 +60,79 @@
       <input type="file" name="file" id="file" required
              class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
     </div>
-    
+        <div id="mod_feedback" class="mb-4 hidden p-3 rounded-lg text-sm border">
+        <p id="mod_message" class="font-bold"></p>
+    </div>
     <button type="submit" 
             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
       Enviar Solicitud de Modificación
     </button>
   </form>
+  <script>
+    const mStartDate = document.getElementById('start_date');
+    const mPeriodType = document.getElementById('period_type');
+    const mFeedbackDiv = document.getElementById('mod_feedback');
+    const mMessage = document.getElementById('mod_message');
+    const mSubmitBtn = document.querySelector('button[type="submit"]');
+
+    // IMPORTANTE: Usamos el ID del empleado dueño de la vacación, no del manager
+    const targetUserId = "{{ vacation.user_id }}";
+
+    async function validateModification() {
+        const startDate = mStartDate.value;
+        const periodType = mPeriodType.value;
+
+        // 1. Resetear UI y bloquear botón
+        mFeedbackDiv.classList.add('hidden');
+        mSubmitBtn.disabled = true;
+        mSubmitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        if (!startDate || !periodType) return;
+
+        try {
+            const response = await fetch('/gestion/api/calculate-end-date', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_date: startDate,
+                    period_type: parseInt(periodType),
+                    target_user_id: parseInt(targetUserId) // Validamos reglas del empleado
+                })
+            });
+
+            const data = await response.json();
+            mFeedbackDiv.classList.remove('hidden');
+
+            if (data.success) {
+                // ÉXITO
+                mMessage.textContent = `✅ Nuevo fin calculado: ${data.end_date}`;
+                mFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-green-50 border-green-200 text-green-700';
+
+                if(data.warning) {
+                     mMessage.textContent += ` (⚠️ ${data.warning})`;
+                     mFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-yellow-50 border-yellow-200 text-yellow-800';
+                }
+
+                // Habilitar botón
+                mSubmitBtn.disabled = false;
+                mSubmitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                // ERROR
+                mMessage.textContent = `❌ ${data.error}`;
+                mFeedbackDiv.className = 'mb-4 p-3 rounded-lg text-sm border bg-red-50 border-red-200 text-red-700';
+            }
+
+        } catch (error) {
+            console.error(error);
+            mMessage.textContent = "Error de conexión.";
+            mFeedbackDiv.classList.remove('hidden');
+        }
+    }
+
+    mStartDate.addEventListener('change', validateModification);
+    mPeriodType.addEventListener('change', validateModification);
+
+    // Validar al cargar (por si el navegador recuerda valores o hay valores por defecto)
+    document.addEventListener('DOMContentLoaded', validateModification);
+</script>
 {% endblock %}
