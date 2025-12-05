@@ -14,13 +14,12 @@
   
   <form action="{{ url_for('vacation_create') }}" method="post" enctype="multipart/form-data" class="max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md border border-gray-100">
     
-    {# --- CAMBIO: SIEMPRE ES PARA EL USUARIO LOGUEADO (AUTO-SERVICIO) --- #}
-    <input type="hidden" name="target_user_id" value="{{ user.id }}">
+    {# --- CORRECCIÓN: Se añadió id="target_user_id" para que el JS lo detecte correctamente --- #}
+    <input type="hidden" name="target_user_id" id="target_user_id" value="{{ user.id }}">
     
     <div class="mb-6 p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-blue-900 text-sm">
         <strong>Solicitante:</strong> {{ user.full_name or user.username }}
     </div>
-    {# ------------------------------------------------------------------ #}
 
     <div class="mb-4">
       <label for="start_date" class="block text-sm font-medium text-gray-700">Fecha de Inicio:</label>
@@ -65,7 +64,7 @@
   <script>
     const startDateInput = document.getElementById('start_date');
     const periodTypeInput = document.getElementById('period_type');
-    const targetUserInput = document.getElementById('target_user_id'); // Capturamos el select
+    const targetUserInput = document.getElementById('target_user_id'); // Ahora sí encuentra el elemento por su ID
     const resultWrapper = document.getElementById('calc_result_wrapper');
     const endDateDisplay = document.getElementById('calc_end_date');
     const warningWrapper = document.getElementById('calc_warning_wrapper');
@@ -74,7 +73,7 @@
     async function updateCalculations() {
       const startDate = startDateInput.value;
       const periodType = periodTypeInput.value;
-      // Obtenemos el ID del usuario seleccionado (si existe el campo)
+      // Obtenemos el valor correctamente
       const targetUserId = targetUserInput ? targetUserInput.value : null;
 
       if (!startDate || !periodType) {
@@ -90,7 +89,7 @@
           body: JSON.stringify({
             start_date: startDate,
             period_type: parseInt(periodType),
-            target_user_id: targetUserId ? parseInt(targetUserId) : null // Enviamos el ID al backend
+            target_user_id: targetUserId ? parseInt(targetUserId) : null
           })
         });
 
@@ -125,7 +124,7 @@
     startDateInput.addEventListener('change', updateCalculations);
     periodTypeInput.addEventListener('change', updateCalculations);
     
-    // También recalcular si cambiamos de usuario (si el select existe)
+    // Si el input existe, escuchamos sus cambios (por si acaso se implementa un select dinámico después)
     if (targetUserInput) {
         targetUserInput.addEventListener('change', updateCalculations);
     }

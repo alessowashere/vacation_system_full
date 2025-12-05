@@ -89,22 +89,27 @@ async def submit_area_to_hr(
 async def submit_individual_vacation(
     request: Request,
     vacation_id: int,
-    file: UploadFile = File(None), # <--- CAMBIO: File(None) hace que sea opcional
+    file: UploadFile = File(None), 
     current: models.User = Depends(get_current_manager_user),
     db: Session = Depends(get_db)
 ):
     """
-    El JEFE envía la solicitud a RRHH (Documento Opcional).
+    Permite enviar una solicitud individual a RRHH.
+    Autorizado para: Admin, Jefe directo, o el MISMO USUARIO si es Manager (Autoservicio).
     """
     vacation = crud.get_vacation_by_id(db, vacation_id)
     if not vacation:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     
-    if current.role != 'admin' and vacation.user.manager_id != current.id:
-        raise HTTPException(status_code=403, detail="No autorizado: No es tu subordinado")
+    # --- CORRECCIÓN AQUÍ ---
+    # Verificar permisos: Admin, Jefe directo O el propio dueño
+    is_admin = (current.role == 'admin')
+    is_boss = (vacation.user.manager_id == current.id)
+    is_owner = (vacation.user_id == current.id) # Permitir si es mi propia solicitud
 
-    # --- ELIMINAMOS LA VALIDACIÓN QUE OBLIGABA A SUBIR ARCHIVO ---
-    # if not file or not file.filename: ...
+    if not is_admin and not is_boss and not is_owner:
+        raise HTTPException(status_code=403, detail="No autorizado: No tienes permisos sobre esta solicitud.")
+    # -----------------------
 
     file_name = None
 
@@ -113,6 +118,7 @@ async def submit_individual_vacation(
         uploads_dir = "uploads"
         os.makedirs(uploads_dir, exist_ok=True)
         
+        # Limpieza básica del nombre de archivo
         safe_filename = "".join(c for c in file.filename if c.isalnum() or c in (' ._-'))
         file_name = f"INDIVIDUAL_{current.area}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_filename}"
         file_disk_path = os.path.join(uploads_dir, file_name)
@@ -127,31 +133,32 @@ async def submit_individual_vacation(
 
     # Actualizar estado en BD
     if vacation.status == 'draft':
+        # Nota: Usamos 'submit_individual_to_hr' del CRUD que actualiza estado y adjunto
         crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name)
         
-        # ... (lógica de emails se mantiene igual) ...
+        # Notificar a RRHH
         hr_emails = get_hr_emails(db)
         if hr_emails:
-            adjunto_txt = "Se ha adjuntado documento." if file_name else "Sin documento adjunto."
+            adjunto_txt = "Se ha adjuntado documento de sustento." if file_name else "Sin documento adjunto."
+            sender_name = current.full_name or current.username
+            
             await send_email_async(
-                subject=f"📄 Solicitud Enviada a RRHH: {vacation.user.full_name}",
+                subject=f"📄 Solicitud Individual Enviada: {vacation.user.full_name}",
                 email_to=hr_emails,
                 body=f"""
                 <div style="font-family: sans-serif;">
                     <h3>Nueva Solicitud Pendiente de Aprobación</h3>
-                    <p>El Jefe <b>{current.full_name}</b> ha enviado la solicitud de <b>{vacation.user.full_name}</b>.</p>
+                    <p>El usuario <b>{sender_name}</b> ha enviado la solicitud de <b>{vacation.user.full_name}</b> a RRHH.</p>
                     <p>Estado: <b>Pendiente RRHH</b></p>
+                    <p>Fechas: {vacation.start_date} al {vacation.end_date}</p>
                     <p>{adjunto_txt}</p>
+                    <hr>
                     <a href="{str(request.url_for('login_page'))}" style="color:#3498db;">Ingresar al Sistema</a>
                 </div>
                 """
             )
         
     return RedirectResponse(url=str(request.url_for('dashboard')) + "?success_msg=Enviado a RRHH correctamente.", status_code=303)
-
-# app/routers/actions.py
-
-# ... (imports)
 
 @router.post("/vacation/{vacation_id}/approve", name="action_approve_vacation")
 async def approve_vacation(

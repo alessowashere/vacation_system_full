@@ -147,15 +147,7 @@
             <div id="panel-borradores" class="tab-panel active-panel">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-gray-700 font-bold text-sm uppercase">Solicitudes Creadas (No Enviadas)</h3>
-                    {% if data.draft_vacations|length > 0 %}
-                    <form action="{{ url_for('action_submit_area_to_hr') }}" method="post" enctype="multipart/form-data" class="flex items-center gap-2">
-                        <input type="file" name="file" id="file" class="block w-48 text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm">
-                            Enviar Lote a RRHH
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
+                    </div>
 
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-100">
@@ -174,7 +166,15 @@
                                 <td class="px-4 py-3 text-sm text-gray-600">{{ v.start_date.strftime('%d/%m') }} - {{ v.end_date.strftime('%d/%m/%Y') }}</td>
                                 <td class="px-4 py-3 text-sm text-center font-bold">{{ v.days }}</td>
                                 <td class="px-4 py-3 text-sm text-right">
-                                    <a href="{{ url_for('vacation_submit_individual_form', vacation_id=v.id) }}" class="text-green-600 hover:text-green-800 text-xs font-bold mr-3">Enviar Individual</a>
+                                    
+                                    {# --- CORRECCIÓN: SOLO MOSTRAR BOTÓN SI NO ES EL PROPIO USUARIO --- #}
+                                    {% if v.user_id != user.id %}
+                                        <a href="{{ url_for('vacation_submit_individual_form', vacation_id=v.id) }}" class="text-green-600 hover:text-green-800 text-xs font-bold mr-3">Enviar Individual</a>
+                                    {% else %}
+                                        <span class="text-xs text-gray-400 italic mr-3" title="Debe aprobarlo tu jefe">Requiere Aprobación Superior</span>
+                                    {% endif %}
+                                    {# ---------------------------------------------------------------- #}
+
                                     <a href="{{ url_for('vacation_edit_form', vacation_id=v.id) }}" class="text-indigo-600 hover:text-indigo-800 text-xs mr-3">Editar</a>
                                     <form action="{{ url_for('action_delete_vacation', vacation_id=v.id) }}" method="post" class="inline">
                                         <button class="text-red-500 hover:text-red-700 text-xs">Borrar</button>

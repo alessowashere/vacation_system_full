@@ -175,7 +175,8 @@ async def create_vacation(
     user_to_create_for = current
 
     if target_user_id:
-        if current.role == 'employee':
+        # Validación de roles
+        if current.role == 'employee' and target_user_id != current.id:
              error_url = str(request.url_for('dashboard')) + "?error=auth&msg=No tienes permiso para asignar vacaciones a otros."
              return RedirectResponse(url=error_url, status_code=302)
         
@@ -184,16 +185,24 @@ async def create_vacation(
              error_url = str(request.url_for('dashboard')) + "?error=not_found&msg=Usuario destino no encontrado."
              return RedirectResponse(url=error_url, status_code=302)
 
+        # --- CORRECCIÓN AQUÍ ---
+        # Si es manager, verificamos que sea su subordinado O que sea él mismo (Auto-solicitud)
         if current.role == 'manager':
-            if target_user.manager_id != current.id:
+            is_self = (target_user.id == current.id)
+            is_subordinate = (target_user.manager_id == current.id)
+            
+            if not is_self and not is_subordinate:
                  error_url = str(request.url_for('dashboard')) + "?error=auth&msg=Este usuario no es tu subordinado."
                  return RedirectResponse(url=error_url, status_code=302)
+        # -----------------------
         
         user_to_create_for = target_user
 
     file_path_in_db = None
     if file and file.filename: 
         uploads_dir = "uploads"
+        # Aseguramos que el directorio exista
+        os.makedirs(uploads_dir, exist_ok=True)
         file_path_in_db = f"{user_to_create_for.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
         file_disk_path = os.path.join(uploads_dir, file_path_in_db)
         
@@ -203,11 +212,14 @@ async def create_vacation(
     try:
         vp = crud.create_vacation(db, user_to_create_for, start_date, period_type, file_path_in_db)
         
+        # Log si fue creado por otro
         if user_to_create_for.id != current.id:
             crud.create_vacation_log(db, vp, current, f"Solicitud creada por el jefe/admin: {current.username}")
         
+        # Notificación al jefe (si existe y no es quien la crea)
         manager = user_to_create_for.manager
-        if manager and manager.email:
+        # Enviamos correo si hay jefe y el creador no es el mismo jefe (para evitar auto-spam)
+        if manager and manager.email and manager.id != current.id:
             approval_link = str(request.url_for('login_page'))
             
             await send_email_async(
