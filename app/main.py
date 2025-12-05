@@ -175,7 +175,7 @@ async def create_vacation(
     user_to_create_for = current
 
     if target_user_id:
-        if current.role == 'employee':
+        if current.role == 'employee' and target_user_id != current.id:
              error_url = str(request.url_for('dashboard')) + "?error=auth&msg=No tienes permiso para asignar vacaciones a otros."
              return RedirectResponse(url=error_url, status_code=302)
         
@@ -184,10 +184,16 @@ async def create_vacation(
              error_url = str(request.url_for('dashboard')) + "?error=not_found&msg=Usuario destino no encontrado."
              return RedirectResponse(url=error_url, status_code=302)
 
+        # --- CORRECCIÓN DE PERMISOS PARA MANAGER ---
         if current.role == 'manager':
-            if target_user.manager_id != current.id:
+            is_subordinate = (target_user.manager_id == current.id)
+            is_self = (target_user.id == current.id)
+            
+            # Permitir si es subordinado O si es él mismo (Autoservicio)
+            if not is_subordinate and not is_self:
                  error_url = str(request.url_for('dashboard')) + "?error=auth&msg=Este usuario no es tu subordinado."
                  return RedirectResponse(url=error_url, status_code=302)
+        # -------------------------------------------
         
         user_to_create_for = target_user
 
@@ -203,11 +209,15 @@ async def create_vacation(
     try:
         vp = crud.create_vacation(db, user_to_create_for, start_date, period_type, file_path_in_db)
         
+        # Log si lo creó otro (Jefe/Admin)
         if user_to_create_for.id != current.id:
             crud.create_vacation_log(db, vp, current, f"Solicitud creada por el jefe/admin: {current.username}")
         
+        # Notificar al jefe del usuario (si existe)
         manager = user_to_create_for.manager
-        if manager and manager.email:
+        # Si me lo creo a mí mismo (siendo manager), mi jefe es 'manager'. Si soy empleado, mi jefe es 'manager'.
+        # Evitar enviarse correo a sí mismo si uno es su propio aprobador (caso raro, pero posible en tests)
+        if manager and manager.email and manager.id != current.id:
             approval_link = str(request.url_for('login_page'))
             
             await send_email_async(

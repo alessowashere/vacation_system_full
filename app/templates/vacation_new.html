@@ -65,6 +65,7 @@
   <script>
     const startDateInput = document.getElementById('start_date');
     const periodTypeInput = document.getElementById('period_type');
+    const targetUserInput = document.getElementById('target_user_id'); // Capturamos el select
     const resultWrapper = document.getElementById('calc_result_wrapper');
     const endDateDisplay = document.getElementById('calc_end_date');
     const warningWrapper = document.getElementById('calc_warning_wrapper');
@@ -73,6 +74,8 @@
     async function updateCalculations() {
       const startDate = startDateInput.value;
       const periodType = periodTypeInput.value;
+      // Obtenemos el ID del usuario seleccionado (si existe el campo)
+      const targetUserId = targetUserInput ? targetUserInput.value : null;
 
       if (!startDate || !periodType) {
         resultWrapper.classList.add('hidden');
@@ -86,11 +89,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             start_date: startDate,
-            period_type: parseInt(periodType)
+            period_type: parseInt(periodType),
+            target_user_id: targetUserId ? parseInt(targetUserId) : null // Enviamos el ID al backend
           })
         });
 
-        if (!response.ok) throw new Error('Error en la conexión.');
+        if (!response.ok) throw new Error('Error en la conexión o validación.');
         const data = await response.json();
 
         if (data.success) {
@@ -98,19 +102,20 @@
           resultWrapper.classList.remove('hidden');
           
           if (data.warning) {
-            warningText.textContent = data.warning;
+            warningText.textContent = "⚠️ " + data.warning;
             warningWrapper.classList.remove('hidden');
-            warningWrapper.className = 'mb-4 p-4 rounded-lg bg-yellow-50 border-yellow-500 text-yellow-700 border';
+            warningWrapper.className = 'mb-4 p-4 rounded-lg bg-yellow-50 border-yellow-500 text-yellow-800 border';
           } else {
             warningWrapper.classList.add('hidden');
           }
         } else {
-          warningText.textContent = data.error;
+          warningText.textContent = "❌ " + data.error;
           warningWrapper.classList.remove('hidden');
           warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
           resultWrapper.classList.add('hidden');
         }
       } catch (error) {
+        console.error(error);
         warningText.textContent = 'No se pudo calcular la fecha. Revise su conexión.';
         warningWrapper.classList.remove('hidden');
         warningWrapper.className = 'mb-4 p-4 rounded-lg bg-red-100 border-red-500 text-red-700 border';
@@ -119,5 +124,10 @@
 
     startDateInput.addEventListener('change', updateCalculations);
     periodTypeInput.addEventListener('change', updateCalculations);
-  </script>
+    
+    // También recalcular si cambiamos de usuario (si el select existe)
+    if (targetUserInput) {
+        targetUserInput.addEventListener('change', updateCalculations);
+    }
+</script>
 {% endblock %}
