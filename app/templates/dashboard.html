@@ -169,7 +169,7 @@
                                     
                                     {# --- CORRECCIÓN: SOLO MOSTRAR BOTÓN SI NO ES EL PROPIO USUARIO --- #}
                                     {% if v.user_id != user.id %}
-                                        <a href="{{ url_for('vacation_submit_individual_form', vacation_id=v.id) }}" class="text-green-600 hover:text-green-800 text-xs font-bold mr-3">Enviar Individual</a>
+                                        <a href="{{ url_for('vacation_submit_individual_form', vacation_id=v.id) }}" class="text-green-600 hover:text-green-800 text-xs font-bold mr-3">Enviar a RRHH</a>
                                     {% else %}
                                         <span class="text-xs text-gray-400 italic mr-3" title="Debe aprobarlo tu jefe">Requiere Aprobación Superior</span>
                                     {% endif %}
