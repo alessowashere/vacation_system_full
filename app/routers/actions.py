@@ -160,6 +160,7 @@ async def approve_vacation(
                 <hr>
                 <p>Disfruta de tu descanso.</p>
                 <p style="font-size: 12px; color: #777;">Sistema de Gestión de Vacaciones - UAndina</p>
+                <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
             </div>
             """
         )
@@ -195,6 +196,7 @@ async def reject_vacation(
                 <p>Hola <b>{vacation.user.full_name}</b>,</p>
                 <p>Tu solicitud de vacaciones para las fechas {vacation.start_date} al {vacation.end_date} ha sido observada o rechazada por RRHH.</p>
                 <p>Por favor, comunícate con tu jefe directo o con la oficina de RRHH para más detalles.</p>
+                <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
             </div>
             """
         )
@@ -283,6 +285,7 @@ async def approve_modification(
                         <li>Hasta: {new_end}</li>
                     </ul>
                     <p>El sistema ha sido actualizado.</p>
+                    <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
                 </div>
                 """
             )
@@ -317,6 +320,7 @@ async def reject_modification(
                     <p>La solicitud de modificación para <b>{employee.full_name}</b> ha sido rechazada por RRHH.</p>
                     <p>Se mantienen las fechas originales (o el estado previo) de la vacación.</p>
                     <p>Por favor contactar con RRHH para más detalles.</p>
+                    <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
                 </div>
                 """
             )
@@ -430,6 +434,7 @@ async def approve_suspension(
                     <p>La solicitud de suspensión para <b>{employee.full_name}</b> ha sido procesada exitosamente.</p>
                     {detalle_extra}
                     <p>Saludos, RRHH.</p>
+                    <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
                 </div>
                 """
             )
@@ -464,6 +469,7 @@ async def reject_suspension(
                     <h3 style="color: #c0392b;">Suspensión Rechazada</h3>
                     <p>La solicitud de suspensión para <b>{employee.full_name}</b> ha sido rechazada.</p>
                     <p>La vacación original sigue vigente y aprobada tal como estaba.</p>
+                    <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
                 </div>
                 """
             )
@@ -515,6 +521,7 @@ async def request_vacation_create(
                 </ul>
                 <p>Por favor, ingresa al sistema para descargar el formato y tramitar la solicitud.</p>
                 <a href="{approval_link}" style="background-color:#3498db; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Ir al Sistema</a>
+                <p style="font-size: 12px; color: #777;">NO CONTESTAR A ESTE CORREO ELECTRÓNICO - SOLO ES INFORMATIVO</p>
             </div>
             """
         )
