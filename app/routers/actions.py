@@ -63,25 +63,6 @@ async def submit_area_to_hr(
     # Ejecutar la lógica de BD
     crud.submit_area_to_hr(db, area=current.area, file_name=file_name, actor=current)
     
-    # --- NUEVO: ENVIAR CORREO A RRHH ---
-    hr_emails = get_hr_emails(db)
-    if hr_emails:
-        adjunto_txt = "Se ha adjuntado documento consolidado." if file_name else "Sin documento consolidado."
-        await send_email_async(
-            subject=f"📦 Lote de Solicitudes Enviado: Equipo de {current.full_name}",
-            email_to=hr_emails,
-            body=f"""
-            <div style="font-family: sans-serif;">
-                <h3 style="color: #2980b9;">Nuevo Lote de Solicitudes</h3>
-                <p>El Jefe <b>{current.full_name}</b> ha enviado un lote de solicitudes de su equipo para revisión.</p>
-                <p><b>Estado:</b> Pendiente RRHH</p>
-                <p>{adjunto_txt}</p>
-                <hr>
-                <p>Por favor ingrese al sistema para procesarlas.</p>
-            </div>
-            """
-        )
-    # -----------------------------------
     
     return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
@@ -137,26 +118,7 @@ async def submit_individual_vacation(
         crud.submit_individual_to_hr(db, vacation=vacation, actor=current, file_name=file_name)
         
         # Notificar a RRHH
-        hr_emails = get_hr_emails(db)
-        if hr_emails:
-            adjunto_txt = "Se ha adjuntado documento de sustento." if file_name else "Sin documento adjunto."
-            sender_name = current.full_name or current.username
-            
-            await send_email_async(
-                subject=f"📄 Solicitud Individual Enviada: {vacation.user.full_name}",
-                email_to=hr_emails,
-                body=f"""
-                <div style="font-family: sans-serif;">
-                    <h3>Nueva Solicitud Pendiente de Aprobación</h3>
-                    <p>El usuario <b>{sender_name}</b> ha enviado la solicitud de <b>{vacation.user.full_name}</b> a RRHH.</p>
-                    <p>Estado: <b>Pendiente RRHH</b></p>
-                    <p>Fechas: {vacation.start_date} al {vacation.end_date}</p>
-                    <p>{adjunto_txt}</p>
-                    <hr>
-                    <a href="{str(request.url_for('login_page'))}" style="color:#3498db;">Ingresar al Sistema</a>
-                </div>
-                """
-            )
+        
         
     return RedirectResponse(url=str(request.url_for('dashboard')) + "?success_msg=Enviado a RRHH correctamente.", status_code=303)
 
@@ -276,20 +238,7 @@ async def request_modification(
             new_start_date_str=start_date,
             new_period_type=period_type
         )
-        hr_emails = get_hr_emails(db)
-        if hr_emails:
-            await send_email_async(
-                subject=f"✏️ Solicitud de MODIFICACIÓN: {vacation.user.full_name}",
-                email_to=hr_emails,
-                body=f"""
-                <div style="font-family: sans-serif;">
-                    <h3>Solicitud de Modificación</h3>
-                    <p>El Jefe <b>{current.full_name}</b> solicita modificar las vacaciones de <b>{vacation.user.full_name}</b>.</p>
-                    <p><b>Motivo:</b> {reason_text}</p>
-                    <p>Revise la sección "Pend. Modificación" en el dashboard.</p>
-                </div>
-                """
-            )
+        
     except Exception as e:
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg={str(e)}"
         return RedirectResponse(url=error_url, status_code=302)
@@ -438,20 +387,7 @@ async def request_suspension(
             file_name=file_name,
             new_end_date_str=new_end_date
         )
-        hr_emails = get_hr_emails(db)
-        if hr_emails:
-            await send_email_async(
-                subject=f"⏸️ Solicitud de SUSPENSIÓN: {vacation.user.full_name}",
-                email_to=hr_emails,
-                body=f"""
-                <div style="font-family: sans-serif;">
-                    <h3>Solicitud de Suspensión ({suspension_type})</h3>
-                    <p>El Jefe <b>{current.full_name}</b> solicita suspender las vacaciones de <b>{vacation.user.full_name}</b>.</p>
-                    <p><b>Motivo:</b> {reason_text}</p>
-                    <p>Revise la sección "Pend. Suspensión" en el dashboard.</p>
-                </div>
-                """
-            )
+        
     except Exception as e:
         error_url = str(request.url_for('dashboard')) + f"?error=general&msg={str(e)}"
         return RedirectResponse(url=error_url, status_code=302)
