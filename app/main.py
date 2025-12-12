@@ -1,25 +1,37 @@
 # app/main.py
-# (VERSIÓN ACTUALIZADA - QUERY EXPLÍCITA EN DASHBOARD)
-
 import os
-from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
-from fastapi.templating import Jinja2Templates
-from app import crud, models, schemas
-from app.db import SessionLocal, engine, Base
-from app.auth import get_current_user, create_access_token, get_current_manager_user, oauth
-from app.db import SessionLocal, get_db
-from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import Optional
+
+# --- IMPORTS DE FASTAPI ---
+from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException, Header, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+
+# --- IMPORTS DE BASE DE DATOS Y APP ---
+from sqlalchemy.orm import Session
+from app import crud, models, schemas
+from app.db import SessionLocal, engine, Base, get_db
+from app.auth import get_current_user, create_access_token, get_current_manager_user, oauth
 from app.utils.email import send_email_async
+
+# --- IMPORTS DE ROUTERS ---
 from app.routers import admin as admin_router
 from app.routers import actions as actions_router
 from app.routers import reports as reports_router
-from app.routers import admin as admin_router
-from app.routers import actions as actions_router
+from app.api import api_router # Asegúrate de importar esto si lo usas abajo
+
+# --- IMPORTS DE RATE LIMITING (SLOWAPI) ---
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+# 1. CONFIGURAR LIMITER CON REGLA GLOBAL
+# Esto asegura que NINGUNA IP pueda hacer más de 100 peticiones/minuto en general
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 def seed_initial_data():
     db = SessionLocal()
@@ -32,6 +44,11 @@ seed_initial_data()
 templates = Jinja2Templates(directory="app/templates")
 
 app = FastAPI(root_path="/gestion")
+
+# 2. CONECTAR LIMITER A LA APP
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware) # Activa la protección global
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY","secret"))
 
@@ -46,6 +63,10 @@ app.state.oauth = oauth
 # --- RUTAS DE AUTENTICACIÓN ---
 @app.get("/", response_class=HTMLResponse, name="home")
 def home(request: Request):
+    print("--- CABECERAS DE LA PETICIÓN ---")
+    print(f"IP Cliente (Directa): {request.client.host}")
+    print(f"X-Forwarded-For: {request.headers.get('x-forwarded-for')}")
+    print(f"User-Agent: {request.headers.get('user-agent')}")
     tmpl = templates.get_template("home.html")
     return tmpl.render({"request": request})
 

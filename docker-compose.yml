@@ -5,6 +5,8 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    #expose:               # <--- AÑADE ESTO: Solo visible para Nginx
+     # - "8000"
     environment:
       - DB_HOST=vacation_db
       - DB_PORT=3306
@@ -30,8 +32,19 @@ services:
       - .:/app
     # --- FIN DE LA MODIFICACIÓN ---
     
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
-
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-access-log --forwarded-allow-ips '*' "
+    
+  #nginx:
+   # image: nginx:alpine
+    #container_name: vacation_nginx
+    #restart: always
+    #ports:
+     # - "8000:80"  # Recibe tráfico del exterior en el 8000
+    #volumes:
+     # - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    #depends_on:
+     # - app
+      
   vacation_db:
     image: mysql:8.0
     container_name: vacation_db
