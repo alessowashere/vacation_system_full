@@ -455,12 +455,10 @@ def suspend_vacation_form(
         "vacation": vacation
     })
 
-# ---- INCLUIR ROUTERS ----
+# ---- INCLUIR ROUTERS (CORREGIDO) ----
 from app.api import api_router
-app.include_router(api_router, prefix="/api")
 
-app.include_router(admin_router.router)
-app.include_router(actions_router.router)
+# Solo incluirlos UNA VEZ
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router.router)
 app.include_router(actions_router.router)

@@ -15,117 +15,99 @@
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     
     <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-lg transition border-t-4 border-t-green-500">
-      <div class="flex items-center mb-4">
-        <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
-          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-        </div>
-        <h3 class="text-xl font-bold text-gray-800">Planificación por Áreas</h3>
-      </div>
-      <p class="text-gray-500 text-sm mb-6 h-12">
-        Descarga el cronograma de vacaciones futuras, agrupado por oficinas.
-      </p>
-      <a href="{{ url_for('report_planned') }}" class="block w-full text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition shadow">
-        Descargar Excel
-      </a>
+      <h3 class="text-xl font-bold text-gray-800 mb-2">Planificación por Áreas</h3>
+      <p class="text-gray-500 text-sm mb-4">Cronograma de vacaciones futuras.</p>
+      <a href="{{ url_for('report_planned') }}" class="btn btn-success w-100 block text-center py-2 bg-green-600 text-white rounded">Descargar Excel</a>
     </div>
 
     <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-lg transition border-t-4 border-t-blue-500">
-      <div class="flex items-center mb-4">
-        <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-        </div>
-        <h3 class="text-xl font-bold text-gray-800">Reporte de Saldos</h3>
-      </div>
-      <p class="text-gray-500 text-sm mb-6 h-12">
-        Balance de días pendientes por empleado. Útil para provisiones contables.
-      </p>
-      <a href="{{ url_for('report_balances') }}" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition shadow">
-        Descargar Excel
-      </a>
+      <h3 class="text-xl font-bold text-gray-800 mb-2">Reporte de Saldos</h3>
+      <p class="text-gray-500 text-sm mb-4">Balance de días pendientes.</p>
+      <a href="{{ url_for('report_balances') }}" class="btn btn-primary w-100 block text-center py-2 bg-blue-600 text-white rounded">Descargar Excel</a>
     </div>
 
     <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-lg transition border-t-4 border-t-purple-500">
-      <div class="flex items-center mb-4">
-        <div class="p-3 rounded-full bg-purple-100 text-purple-600 mr-4">
-          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        </div>
-        <h3 class="text-xl font-bold text-gray-800">Historial Global</h3>
-      </div>
-      <p class="text-gray-500 text-sm mb-6 h-12">
-        Registro completo de todas las solicitudes pasadas, rechazadas y canceladas.
-      </p>
-      <a href="{{ url_for('report_history') }}" class="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition shadow">
-        Descargar Excel
-      </a>
+      <h3 class="text-xl font-bold text-gray-800 mb-2">Historial Global</h3>
+      <p class="text-gray-500 text-sm mb-4">Registro histórico completo.</p>
+      <a href="{{ url_for('report_history') }}" class="btn btn-secondary w-100 block text-center py-2 bg-purple-600 text-white rounded">Descargar Excel</a>
     </div>
+  </div>
     
-    <div class="row mb-4">
-          <div class="col-lg-12">
-              <div class="card shadow">
-                  <div class="card-header bg-warning text-white">
-                      <i class="fas fa-exclamation-triangle"></i> Alertas ({{ alerts.total_alerts }})
-                  </div>
-                  <div class="card-body">
-                      {% if alerts.total_alerts == 0 %}
-                          <p class="mb-0 text-success"><i class="fas fa-check-circle"></i> No hay alertas pendientes.</p>
-                      {% else %}
-                          {% if alerts.missing_schedule %}
-                              <h5 class="card-title text-danger">Empleados que necesitan programar vacaciones (>= 10 días pendientes)</h5>
-                              <ul>
-                              {% for user in alerts.missing_schedule %}
-                                  <li>{{ user.full_name }} ({{ user.email }}). Días pendientes: {{ user.vacation_days_total - user.vacation_days_taken }}</li>
-                              {% endfor %}
-                              </ul>
-                          {% endif %}
-  
-                          {% if alerts.pending_requests_managers %}
-                              <h5 class="card-title mt-4 text-danger">Jefes con solicitudes de vacaciones pendientes de aprobación</h5>
-                              <ul>
-                              {% for manager in alerts.pending_requests_managers %}
-                                  <li>{{ manager.full_name }} ({{ manager.email }})</li>
-                              {% endfor %}
-                              </ul>
-                          {% endif %}
-                      {% endif %}
-                  </div>
+  <div class="row mb-4 mt-5">
+      <div class="col-lg-12">
+          <div class="card shadow">
+              <div class="card-header bg-warning text-white font-weight-bold p-3">
+                  <i class="fas fa-exclamation-triangle"></i> Alertas del Sistema ({{ alerts.total_alerts }})
               </div>
-          </div>
-      </div>
-      <div class="card mb-4">
-          <div class="card-header">
-              <i class="fas fa-table mr-1"></i>
-              Listado de Empleados y Jefes con Permiso de Solicitud ({{ users | length }} usuarios)
-          </div>
-          <div class="card-body">
-              <div class="table-responsive">
-                  <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
-                      <thead>
-                          <tr>
-                              <th>Nombre Completo</th>
-                              <th>Email</th>
-                              <th>Rol</th>
-                              <th>Días Totales</th>
-                              <th>Días Tomados</th>
-                              <th>Días Pendientes</th>
-                              </tr>
-                      </thead>
-                      <tbody>
-                          {% for user in users %}
-                          <tr>
-                              <td><a href="/admin/users/{{ user.id }}">{{ user.full_name }}</a></td>
-                              <td>{{ user.email }}</td>
-                              <td>{{ user.role }}{% if user.role == 'manager' and user.can_request_own_vacation %} (Auto Solicitud: SI){% endif %}</td>
-                              <td>{{ user.vacation_days_total }}</td>
-                              <td>{{ user.vacation_days_taken }}</td>
-                              <td>{{ user.vacation_days_total - user.vacation_days_taken }}</td>
-                          </tr>
+              <div class="card-body p-4 bg-white">
+                  {% if alerts.total_alerts == 0 %}
+                      <p class="mb-0 text-success font-weight-bold"><i class="fas fa-check-circle"></i> Todo está en orden. No hay alertas.</p>
+                  {% else %}
+                      {% if alerts.missing_schedule %}
+                          <h5 class="card-title text-danger font-bold mt-2">Empleados con mucho saldo pendiente (>10 días)</h5>
+                          <ul class="list-disc pl-5 mb-4">
+                          {% for u in alerts.missing_schedule %}
+                              <li>
+                                  <b>{{ u.full_name }}</b> ({{ u.email }}) 
+                                  - Pendiente: <span class="text-red-600 font-bold">{{ u.balance }} días</span>
+                              </li>
                           {% endfor %}
-                      </tbody>
-                  </table>
+                          </ul>
+                      {% endif %}
+
+                      {% if alerts.managers_pending %}
+                          <h5 class="card-title mt-4 text-danger font-bold">Jefes con solicitudes en borrador de sus equipos</h5>
+                          <ul class="list-disc pl-5">
+                          {% for manager in alerts.managers_pending %}
+                              <li>{{ manager.full_name }} ({{ manager.email }})</li>
+                          {% endfor %}
+                          </ul>
+                      {% endif %}
+                  {% endif %}
               </div>
           </div>
       </div>
   </div>
 
+  <div class="card mb-4 shadow mt-4">
+      <div class="card-header bg-gray-100 p-3 font-bold border-b">
+          <i class="fas fa-table mr-1"></i>
+          Listado de Personal con Derecho a Vacaciones ({{ users | length }})
+      </div>
+      <div class="card-body p-0">
+          <div class="table-responsive">
+              <table class="table table-striped mb-0" id="dataTable" width="100%" cellspacing="0">
+                  <thead class="bg-gray-200 text-gray-700">
+                      <tr>
+                          <th class="p-3">Nombre Completo</th>
+                          <th class="p-3">Email</th>
+                          <th class="p-3">Rol</th>
+                          <th class="p-3 text-center">Total Anual</th>
+                          <th class="p-3 text-center">Tomados</th>
+                          <th class="p-3 text-center">Saldo</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {% for user in users %}
+                      <tr class="border-b hover:bg-gray-50">
+                          <td class="p-3"><a href="/gestion/admin/users/{{ user.id }}/edit" class="text-blue-600 hover:underline">{{ user.full_name }}</a></td>
+                          <td class="p-3">{{ user.email }}</td>
+                          <td class="p-3">
+                              {{ user.role }}
+                              {% if user.role == 'manager' and user.can_request_own_vacation %} 
+                                  <span class="badge badge-info bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs ml-2">Auto-Gestión</span>
+                              {% endif %}
+                          </td>
+                          <td class="p-3 text-center">{{ user.vacation_days_total }}</td>
+                          <td class="p-3 text-center">{{ user.vacation_days_taken }}</td>
+                          <td class="p-3 text-center font-bold {% if user.balance > 10 %}text-red-600{% else %}text-green-600{% endif %}">
+                              {{ user.balance }}
+                          </td>
+                      </tr>
+                      {% endfor %}
+                  </tbody>
+              </table>
+          </div>
+      </div>
   </div>
 {% endblock %}

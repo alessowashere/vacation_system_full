@@ -1,5 +1,4 @@
 # app/crud.py
-# (VERSIÓN DEFINITIVA Y ROBUSTA)
 import re
 from .db import SessionLocal, get_db
 from . import models
@@ -8,7 +7,6 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta, date
 import os
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_
 from typing import List, Dict, Any
 
 from app.logic.vacation_calculator import VacationCalculator
@@ -50,7 +48,7 @@ def create_user(
 def get_user_vacation_balance(db: Session, user: models.User):
     total_days_used = db.query(func.sum(models.VacationPeriod.days)).filter(
         models.VacationPeriod.user_id == user.id,
-        models.VacationPeriod.status.in_(['draft', 'pending_hr', 'approved', 'pending_modification'])
+        models.VacationPeriod.status.in_(['draft', 'pending_hr', 'approved', 'pending_modification', 'pending_suspension'])
     ).scalar()
     
     if total_days_used is None:
@@ -83,7 +81,6 @@ def create_vacation(
 ):
     remaining_balance = get_user_vacation_balance(db, user)
     
-    # 1. Validación Previa de Saldo Nominal
     if type_period > remaining_balance:
         raise ValueError(f"Saldo insuficiente ({remaining_balance} días). No puedes pedir {type_period}.")
     
@@ -96,24 +93,19 @@ def create_vacation(
         if not is_valid_limit:
             raise ValueError(limit_msg)
             
-        # 2. Validar Reglas de Fecha (Futuro, Feriados, Fines de Semana)
         is_valid_date, date_msg = calculator.validate_start_date(sd)
         if not is_valid_date:
             raise ValueError(date_msg)
 
-        # 3. Calcular fechas y días reales
         calculation = calculator.calculate_end_date(sd, type_period)
         final_start = calculation["start_date"]
         final_end = calculation["end_date"]
         real_days = calculation["days_consumed"]
 
-        # 4. Validar Overlap (Cruces)
         is_valid_overlap, error_overlap = calculator.check_overlap(final_start, final_end)
         if not is_valid_overlap:
             raise ValueError(error_overlap)
 
-        # 5. Validación FINAL de Saldo (Días Reales vs Balance)
-        # Esto atrapa el caso donde pides 30, pero por ser viernes se cobran 32 y ya no te alcanza.
         if real_days > remaining_balance:
              raise ValueError(f"Saldo insuficiente. La solicitud requiere {real_days} días (incluye extensiones), tienes {remaining_balance}.")
 
@@ -137,41 +129,23 @@ def create_vacation(
     except Exception as e:
         raise Exception(f"Error inesperado: {str(e)}")
 
-# En app/crud.py
-
 def get_dashboard_data(db: Session, user: models.User):
     data = {}
     today = date.today()
     
-    # --- LOGICA DE FILTROS COMUNES ---
-    # Definimos filtros base según el rol
     base_query = db.query(models.VacationPeriod).options(joinedload(models.VacationPeriod.user))
     
     if user.role == "manager":
-        # Managers ven lo de sus subordinados
         conditions = [models.User.manager_id == user.id]
-        
-        # 2. Si tiene el permiso especial, TAMBIÉN ver las suyas propias (id == user.id)
         if user.can_request_own_vacation:
             conditions.append(models.User.id == user.id)
-            
-        # Aplicar filtro OR (mis subordinados O yo mismo)
         base_query = base_query.join(models.User).filter(or_(*conditions))
     elif user.role == "employee":
-        # Empleados ven lo suyo
         base_query = base_query.filter(models.VacationPeriod.user_id == user.id)
-    # Admin/HR ven todo (no se aplica filtro extra)
 
-    # --- OBTENCIÓN DE DATOS ---
-    
-    # 1. Borradores
     data["draft_vacations"] = base_query.filter(models.VacationPeriod.status == 'draft').all()
-    
-    # 2. Pendientes de Aprobación (RRHH)
     data["pending_vacations"] = base_query.filter(models.VacationPeriod.status == 'pending_hr').all()
     
-    # 3. Trámites Especiales (Modificaciones / Suspensiones)
-    # Nota: Estos requieren queries separadas porque parten de las tablas de requests
     if user.role == "manager":
         data["pending_modifications"] = db.query(models.ModificationRequest).options(
             joinedload(models.ModificationRequest.requesting_user),
@@ -199,28 +173,19 @@ def get_dashboard_data(db: Session, user: models.User):
         data["pending_modifications"] = []
         data["pending_suspensions"] = []
 
-    # 4. Próximos (Aprobados y Futuros)
     data["upcoming_vacations"] = base_query.filter(
         models.VacationPeriod.status == 'approved',
-        models.VacationPeriod.start_date >= today # Incluye las que inician hoy
+        models.VacationPeriod.start_date >= today
     ).order_by(models.VacationPeriod.start_date).all()
 
-    # 5. Histórico (CORREGIDO PARA EVITAR DUPLICADOS)
-    # Incluye:
-    # - Rechazados
-    # - Suspendidos
-    # - Aprobados que YA TERMINARON (end_date < today)
-    # - Opcional: Aprobados en curso (start < today <= end), si no quieres verlos en próximos.
-    
     data["finalized_vacations"] = base_query.filter(
         (models.VacationPeriod.status.in_(['rejected', 'suspended'])) | 
         (
             (models.VacationPeriod.status == 'approved') & 
-            (models.VacationPeriod.start_date < today) # Solo mostramos aquí las que ya pasaron o empezaron
+            (models.VacationPeriod.start_date < today)
         )
     ).order_by(models.VacationPeriod.start_date.desc()).all()
     
-    # (Para el empleado, my_vacations sigue siendo todo el historial crudo si se necesita)
     if user.role == "employee":
         data["my_vacations"] = base_query.order_by(models.VacationPeriod.start_date.desc()).all()
         
@@ -241,32 +206,11 @@ def update_vacation_status(db: Session, vacation: models.VacationPeriod, new_sta
     return vacation
 
 def check_edit_permission(vacation: models.VacationPeriod, user: models.User):
-    """
-    Verifica si el usuario actual tiene permiso para editar/borrar una solicitud (Borrador).
-    """
-    # 1. Validaciones básicas
-    if not vacation: 
-        return False
-    # Solo se pueden editar/borrar borradores
-    if vacation.status != 'draft': 
-        return False
-        
-    if user.id == vacation.user_id: 
-        return True
-    
-    # 2. Admin y RRHH tienen permiso universal
-    if user.role in ['admin', 'hr']: 
-        return True
-    
-    # 3. EL DUEÑO SIEMPRE PUEDE (REGLA DE ORO)
-    # Esta línea arregla el problema: Si la solicitud es mía, tengo permiso.
-    # (Ya no importa si soy manager, employee o si tengo el flag activado o no. 
-    # Si logré crearla y está a mi nombre, debo poder borrarla).
-    
-    # 4. El JEFE DIRECTO puede gestionar las de sus subordinados
-    if user.role == 'manager' and vacation.user.manager_id == user.id: 
-        return True
-    
+    if not vacation: return False
+    if vacation.status != 'draft': return False
+    if user.id == vacation.user_id: return True
+    if user.role in ['admin', 'hr']: return True
+    if user.role == 'manager' and vacation.user.manager_id == user.id: return True
     return False
 
 def update_vacation_details(
@@ -280,11 +224,9 @@ def update_vacation_details(
     if not vacation:
         raise Exception("Solicitud no encontrada")
  
-    # Recalculamos el saldo disponible sumando los días de ESTA vacación (porque la vamos a cambiar)
     current_balance = get_user_vacation_balance(db, vacation.user)
     available_balance_for_edit = current_balance + vacation.days
     
-    # 1. Validación Nominal
     if type_period > available_balance_for_edit:
         raise Exception(f"Error: El periodo ({type_period}) excede tu saldo disponible para editar ({available_balance_for_edit}).")
 
@@ -292,8 +234,6 @@ def update_vacation_details(
     try:
         sd = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         
-        # 2. Validar Fecha (Futuro, etc.)
-        # Nota: Al editar, validamos que la NUEVA fecha sea válida hoy.
         is_valid_limit, limit_msg = calculator.check_period_type_limit(sd, type_period, ignore_vacation_id=vacation.id)
         if not is_valid_limit:
             raise ValueError(limit_msg)
@@ -302,25 +242,21 @@ def update_vacation_details(
         if not is_valid_date:
             raise ValueError(date_msg)
 
-        # 3. Calcular
         calculation = calculator.calculate_end_date(sd, type_period)
         real_days = calculation["days_consumed"]
         
-        # 4. Validación FINAL de Saldo Real
         if real_days > available_balance_for_edit:
              raise ValueError(f"Saldo insuficiente. Requieres {real_days} días, tienes {available_balance_for_edit}.")
 
-        # Actualizar
         vacation.start_date = calculation["start_date"]
         vacation.end_date = calculation["end_date"]
         vacation.days = real_days
         vacation.type_period = type_period
-        if file_name: # Solo actualizar si hay nuevo archivo
+        if file_name:
             vacation.attached_file = file_name
         
         db.commit()
         db.refresh(vacation)
-        
         create_vacation_log(db, vacation, actor, f"Solicitud editada. Nuevas fechas: {sd} por {type_period} días.")
         return vacation
 
@@ -330,13 +266,8 @@ def update_vacation_details(
         raise Exception(f"Error inesperado: {str(e)}")
 
 def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User):
-    """
-    Envía todos los borradores de los subordinados del 'actor' (Manager) a RRHH.
-    CORREGIDO: Filtra por manager_id, no por nombre de área.
-    """
-    # Buscamos vacaciones que sean 'draft' Y cuyo usuario tenga como jefe al 'actor' actual
     vacations_to_update = db.query(models.VacationPeriod).join(models.User).filter(
-        models.User.manager_id == actor.id,  # <--- ESTA ES LA CLAVE
+        models.User.manager_id == actor.id,
         models.VacationPeriod.status == 'draft'
     ).all()
 
@@ -345,10 +276,8 @@ def submit_area_to_hr(db: Session, area: str, file_name: str, actor: models.User
 
     for v in vacations_to_update:
         v.status = "pending_hr"
-        # Si se subió archivo, lo guardamos. Si no (file_name es None), no tocamos el campo.
         if file_name:
             v.consolidated_doc_path = file_name
-            
         create_vacation_log(db, v, actor, f"Enviado a RRHH en lote por el jefe.")
     
     db.commit()
@@ -362,22 +291,12 @@ def submit_individual_to_hr(db: Session, vacation: models.VacationPeriod, actor:
 
 def delete_vacation_period(db: Session, vacation_id: int):
     db_vacation = get_vacation_by_id(db, vacation_id)
-    
-    # Verificamos que exista y que esté en estado 'draft'
     if db_vacation and db_vacation.status == 'draft':
-        # 1. Eliminar Logs (Historial) asociados a esta vacación
-        # Esto soluciona el error de "Foreign Key Constraint"
         db.query(models.VacationLog).filter(models.VacationLog.vacation_period_id == vacation_id).delete()
-        
-        # 2. Por seguridad, eliminar también posibles solicitudes de modificación/suspensión huérfanas
-        # (Aunque en estado 'draft' no deberían existir, es mejor prevenir)
         db.query(models.ModificationRequest).filter(models.ModificationRequest.vacation_period_id == vacation_id).delete()
         db.query(models.SuspensionRequest).filter(models.SuspensionRequest.vacation_period_id == vacation_id).delete()
-
-        # 3. Finalmente, eliminar la vacación
         db.delete(db_vacation)
         db.commit()
-        
     return db_vacation
 
 def get_holiday(db: Session, holiday_id: int):
@@ -404,7 +323,6 @@ def delete_holiday(db: Session, holiday_id: int):
     return db_holiday
 
 def seed_holidays(db: Session):
-    # (Lógica existente de seed se mantiene si no se borra)
     pass 
 
 def get_setting(db: Session, key: str):
@@ -436,7 +354,6 @@ def seed_settings(db: Session):
 def create_modification_request(db: Session, vacation: models.VacationPeriod, user: models.User, reason: str, file_name: str, new_start_date_str: str, new_period_type: int):
     original_user = vacation.user
     user_balance = get_user_vacation_balance(db, original_user)
-    # Saldo disponible considerando que la vacación original se va a reemplazar
     available_balance = user_balance + vacation.days
     
     if new_period_type > available_balance:
@@ -445,17 +362,13 @@ def create_modification_request(db: Session, vacation: models.VacationPeriod, us
     calculator = VacationCalculator(db, original_user)
     try:
         sd = datetime.strptime(new_start_date_str, "%Y-%m-%d").date()
-        
-        # 1. Validar Fecha
         is_valid_date, date_msg = calculator.validate_start_date(sd)
         if not is_valid_date:
             raise ValueError(date_msg)
 
-        # 2. Calcular
         calculation = calculator.calculate_end_date(sd, new_period_type)
         real_days = calculation["days_consumed"]
 
-        # 3. Validar Saldo Real
         if real_days > available_balance:
              raise ValueError(f"Saldo insuficiente. La modificación requiere {real_days} días, tienes {available_balance}.")
 
@@ -463,11 +376,22 @@ def create_modification_request(db: Session, vacation: models.VacationPeriod, us
         raise Exception(f"Error: {str(e)}")
 
     mod_req = models.ModificationRequest(
-        # ... (resto igual) ...
-        new_days=real_days, # Guardamos los días reales calculados
-        # ...
+        vacation_period_id=vacation.id,
+        requesting_user_id=user.id,
+        reason_text=reason,
+        attached_doc_path=file_name,
+        new_start_date=calculation["start_date"],
+        new_end_date=calculation["end_date"],
+        new_days=real_days,
+        new_period_type=new_period_type,
+        status="pending_review"
     )
-    # ...
+    db.add(mod_req)
+    update_vacation_status(db, vacation, "pending_modification", user)
+    db.commit()
+    db.refresh(mod_req)
+    create_vacation_log(db, vacation, user, f"Solicitó modificación. Nueva fecha tentativa: {sd} ({new_period_type} días).")
+    return mod_req
 
 def get_modification_by_id(db: Session, mod_id: int):
     return db.query(models.ModificationRequest).filter(models.ModificationRequest.id == mod_id).first()
@@ -576,7 +500,7 @@ def get_all_users(db: Session):
 def get_all_managers(db: Session):
     return db.query(models.User).filter(models.User.role.in_(['manager', 'admin', 'hr'])).order_by(models.User.username).all()
 
-def admin_update_user(db: Session, user: models.User, username: str, full_name: str, email: str, role: str, area: str, vacation_days_total: int, manager_id: int, vacation_policy_id: int = None, location: str = "CUSCO", can_request_own_vacation: bool = False): # <--- AÑADIR AQUÍ AL FINAL
+def admin_update_user(db: Session, user: models.User, username: str, full_name: str, email: str, role: str, area: str, vacation_days_total: int, manager_id: int, vacation_policy_id: int = None, location: str = "CUSCO", can_request_own_vacation: bool = False): 
     user.username = username
     user.full_name = full_name
     user.email = email
@@ -586,7 +510,7 @@ def admin_update_user(db: Session, user: models.User, username: str, full_name: 
     user.manager_id = manager_id if manager_id else None
     user.vacation_policy_id = vacation_policy_id if vacation_policy_id else None
     user.location = location
-    user.can_request_own_vacation = can_request_own_vacation # <--- Y AQUÍ
+    user.can_request_own_vacation = can_request_own_vacation
     db.commit()
     db.refresh(user)
     return user
@@ -609,66 +533,5 @@ def delete_policy(db: Session, policy_id: int):
         db.commit()
     return policy
 
-# --- NUEVA FUNCIÓN: Recuperar explícitamente los subordinados ---
 def get_users_by_manager(db: Session, manager_id: int):
-    """Obtiene explícitamente los empleados cuyo manager_id es el dado."""
     return db.query(models.User).filter(models.User.manager_id == manager_id).order_by(models.User.full_name).all()
-    
-def get_users_for_reports(db: Session) -> List[models.User]:
-    """
-    Recupera todos los usuarios activos que tienen permitido solicitar vacaciones:
-    - Todos los roles 'employee'.
-    - Roles 'manager' con can_request_own_vacation activada.
-    - Se excluye explícitamente el rol 'admin'.
-    """
-    return db.query(models.User).filter(
-        models.User.is_active == True,
-        models.User.role != 'admin', # Asumiendo que el admin no necesita vacaciones
-        or_(
-            models.User.role == 'employee',
-            and_(
-                models.User.role == 'manager',
-                models.User.can_request_own_vacation == True
-            )
-        )
-    ).order_by(models.User.full_name).all()
-    
-def get_users_missing_schedule(db: Session, min_days_to_schedule: int = 10) -> List[models.User]:
-    """
-    Recupera usuarios elegibles para vacaciones que tienen una cantidad significativa 
-    de días pendientes por programar (Vacaciones Totales - Vacaciones Tomadas > umbral).
-    Se usa un umbral de 10 días como ejemplo; puedes ajustarlo.
-    """
-    # Se aplica el mismo filtro de elegibilidad de get_users_for_reports
-    eligible_users_query = db.query(models.User).filter(
-        models.User.is_active == True,
-        models.User.role != 'admin',
-        or_(
-            models.User.role == 'employee',
-            and_(
-                models.User.role == 'manager',
-                models.User.can_request_own_vacation == True
-            )
-        )
-    )
-
-    # Condición de días pendientes > umbral
-    users_with_days_left = eligible_users_query.filter(
-        (models.User.vacation_days_total - models.User.vacation_days_taken) >= min_days_to_schedule
-    ).order_by(models.User.full_name).all()
-
-    return users_with_days_left
-
-# NUEVA FUNCIÓN para alerta de solicitudes pendientes de managers
-def get_managers_with_pending_requests(db: Session) -> List[models.User]:
-    """
-    Recupera managers que tienen al menos una solicitud de vacaciones 
-    de alguno de sus empleados en estado 'pending'.
-    """
-    # Une la tabla de Users con sus empleados y las solicitudes de vacaciones de esos empleados.
-    managers_with_pending = db.query(models.User).join(models.User.employees).join(models.User.vacation_requests).filter(
-        models.User.role == 'manager',
-        models.VacationRequest.status == 'pending' #
-    ).distinct().order_by(models.User.full_name).all()
-
-    return managers_with_pending

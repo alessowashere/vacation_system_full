@@ -253,10 +253,8 @@ def admin_user_reset_password(request: Request, user_id: int, db: Session = Depe
 # --- ORGANIGRAMA ---
 @router.get("/reports", name="admin_reports_view")
 def admin_reports_view(request: Request):
-    """
-    Redirige a la nueva sección de reportes en reports.py
-    para evitar el error de 'alerts undefined'.
-    """
+    # La barra al principio (/) indica la raíz del dominio/puerto actual.
+    # El status_code 303 (See Other) es el correcto para redirecciones tras POST o cambios de flujo.
     return RedirectResponse(url="/gestion/reports/", status_code=303)
 
 @router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
