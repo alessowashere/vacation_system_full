@@ -92,6 +92,10 @@ def create_vacation(
     try:
         sd = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         
+        is_valid_limit, limit_msg = calculator.check_period_type_limit(sd, type_period)
+        if not is_valid_limit:
+            raise ValueError(limit_msg)
+            
         # 2. Validar Reglas de Fecha (Futuro, Feriados, Fines de Semana)
         is_valid_date, date_msg = calculator.validate_start_date(sd)
         if not is_valid_date:
@@ -246,6 +250,9 @@ def check_edit_permission(vacation: models.VacationPeriod, user: models.User):
     # Solo se pueden editar/borrar borradores
     if vacation.status != 'draft': 
         return False
+        
+    if user.id == vacation.user_id: 
+        return True
     
     # 2. Admin y RRHH tienen permiso universal
     if user.role in ['admin', 'hr']: 
@@ -255,8 +262,6 @@ def check_edit_permission(vacation: models.VacationPeriod, user: models.User):
     # Esta línea arregla el problema: Si la solicitud es mía, tengo permiso.
     # (Ya no importa si soy manager, employee o si tengo el flag activado o no. 
     # Si logré crearla y está a mi nombre, debo poder borrarla).
-    if user.id == vacation.user_id: 
-        return True
     
     # 4. El JEFE DIRECTO puede gestionar las de sus subordinados
     if user.role == 'manager' and vacation.user.manager_id == user.id: 
@@ -289,6 +294,10 @@ def update_vacation_details(
         
         # 2. Validar Fecha (Futuro, etc.)
         # Nota: Al editar, validamos que la NUEVA fecha sea válida hoy.
+        is_valid_limit, limit_msg = calculator.check_period_type_limit(sd, type_period, ignore_vacation_id=vacation.id)
+        if not is_valid_limit:
+            raise ValueError(limit_msg)
+        
         is_valid_date, date_msg = calculator.validate_start_date(sd)
         if not is_valid_date:
             raise ValueError(date_msg)
@@ -604,3 +613,62 @@ def delete_policy(db: Session, policy_id: int):
 def get_users_by_manager(db: Session, manager_id: int):
     """Obtiene explícitamente los empleados cuyo manager_id es el dado."""
     return db.query(models.User).filter(models.User.manager_id == manager_id).order_by(models.User.full_name).all()
+    
+def get_users_for_reports(db: Session) -> List[models.User]:
+    """
+    Recupera todos los usuarios activos que tienen permitido solicitar vacaciones:
+    - Todos los roles 'employee'.
+    - Roles 'manager' con can_request_own_vacation activada.
+    - Se excluye explícitamente el rol 'admin'.
+    """
+    return db.query(models.User).filter(
+        models.User.is_active == True,
+        models.User.role != 'admin', # Asumiendo que el admin no necesita vacaciones
+        or_(
+            models.User.role == 'employee',
+            and_(
+                models.User.role == 'manager',
+                models.User.can_request_own_vacation == True
+            )
+        )
+    ).order_by(models.User.full_name).all()
+    
+def get_users_missing_schedule(db: Session, min_days_to_schedule: int = 10) -> List[models.User]:
+    """
+    Recupera usuarios elegibles para vacaciones que tienen una cantidad significativa 
+    de días pendientes por programar (Vacaciones Totales - Vacaciones Tomadas > umbral).
+    Se usa un umbral de 10 días como ejemplo; puedes ajustarlo.
+    """
+    # Se aplica el mismo filtro de elegibilidad de get_users_for_reports
+    eligible_users_query = db.query(models.User).filter(
+        models.User.is_active == True,
+        models.User.role != 'admin',
+        or_(
+            models.User.role == 'employee',
+            and_(
+                models.User.role == 'manager',
+                models.User.can_request_own_vacation == True
+            )
+        )
+    )
+
+    # Condición de días pendientes > umbral
+    users_with_days_left = eligible_users_query.filter(
+        (models.User.vacation_days_total - models.User.vacation_days_taken) >= min_days_to_schedule
+    ).order_by(models.User.full_name).all()
+
+    return users_with_days_left
+
+# NUEVA FUNCIÓN para alerta de solicitudes pendientes de managers
+def get_managers_with_pending_requests(db: Session) -> List[models.User]:
+    """
+    Recupera managers que tienen al menos una solicitud de vacaciones 
+    de alguno de sus empleados en estado 'pending'.
+    """
+    # Une la tabla de Users con sus empleados y las solicitudes de vacaciones de esos empleados.
+    managers_with_pending = db.query(models.User).join(models.User.employees).join(models.User.vacation_requests).filter(
+        models.User.role == 'manager',
+        models.VacationRequest.status == 'pending' #
+    ).distinct().order_by(models.User.full_name).all()
+
+    return managers_with_pending

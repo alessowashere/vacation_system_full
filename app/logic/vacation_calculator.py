@@ -1,4 +1,5 @@
 # app/logic/vacation_calculator.py
+from sqlalchemy import extract, and_
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from app import crud, models
@@ -22,7 +23,42 @@ class VacationCalculator:
             "ALLOW_START_ON_HOLIDAY": settings_dict.get("ALLOW_START_ON_HOLIDAY", "False") == "True",
             "ALLOW_START_ON_WEEKEND": settings_dict.get("ALLOW_START_ON_WEEKEND", "False") == "True",
         }
+        
+    def check_period_type_limit(self, start_date: date, period_type: int, ignore_vacation_id: int = None):
+        """
+        Valida que el usuario no repita periodos fraccionados (7 u 8 días) más de una vez al año.
+        Regla: Solo 1 de 7 días y 1 de 8 días permitidos por año (para formar un bloque de 15).
+        """
+        # Solo nos interesa validar si piden 7 u 8
+        if period_type not in [7, 8]:
+            return True, None
 
+        if not self.user:
+            return True, None
+
+        year = start_date.year
+        
+        # Consultamos si ya existe una vacación APROBADA, PENDIENTE o BORRADOR con ese mismo tipo y año
+        query = self.db.query(models.VacationPeriod).filter(
+            models.VacationPeriod.user_id == self.user.id,
+            models.VacationPeriod.type_period == period_type,
+            # Filtramos por el mismo año de la solicitud
+            extract('year', models.VacationPeriod.start_date) == year,
+            # Ignoramos las rechazadas (si te rechazaron una de 7, puedes volver a pedirla)
+            models.VacationPeriod.status.in_(['draft', 'pending_hr', 'approved', 'pending_modification', 'pending_suspension', 'suspended'])
+        )
+
+        # Si estamos editando, excluimos la propia solicitud para no contarse a sí misma
+        if ignore_vacation_id:
+            query = query.filter(models.VacationPeriod.id != ignore_vacation_id)
+
+        count = query.count()
+
+        if count >= 1:
+            return False, f"Restricción: Ya tienes registrada una solicitud de {period_type} días para el año {year}. Solo se permite una vez por periodo."
+
+        return True, None
+        
     def load_holidays(self, location: str):
         current_year = date.today().year
         # Cargamos este año y el siguiente para tener margen

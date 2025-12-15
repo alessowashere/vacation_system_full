@@ -58,6 +58,74 @@
         Descargar Excel
       </a>
     </div>
+    
+    <div class="row mb-4">
+          <div class="col-lg-12">
+              <div class="card shadow">
+                  <div class="card-header bg-warning text-white">
+                      <i class="fas fa-exclamation-triangle"></i> Alertas ({{ alerts.total_alerts }})
+                  </div>
+                  <div class="card-body">
+                      {% if alerts.total_alerts == 0 %}
+                          <p class="mb-0 text-success"><i class="fas fa-check-circle"></i> No hay alertas pendientes.</p>
+                      {% else %}
+                          {% if alerts.missing_schedule %}
+                              <h5 class="card-title text-danger">Empleados que necesitan programar vacaciones (>= 10 días pendientes)</h5>
+                              <ul>
+                              {% for user in alerts.missing_schedule %}
+                                  <li>{{ user.full_name }} ({{ user.email }}). Días pendientes: {{ user.vacation_days_total - user.vacation_days_taken }}</li>
+                              {% endfor %}
+                              </ul>
+                          {% endif %}
+  
+                          {% if alerts.pending_requests_managers %}
+                              <h5 class="card-title mt-4 text-danger">Jefes con solicitudes de vacaciones pendientes de aprobación</h5>
+                              <ul>
+                              {% for manager in alerts.pending_requests_managers %}
+                                  <li>{{ manager.full_name }} ({{ manager.email }})</li>
+                              {% endfor %}
+                              </ul>
+                          {% endif %}
+                      {% endif %}
+                  </div>
+              </div>
+          </div>
+      </div>
+      <div class="card mb-4">
+          <div class="card-header">
+              <i class="fas fa-table mr-1"></i>
+              Listado de Empleados y Jefes con Permiso de Solicitud ({{ users | length }} usuarios)
+          </div>
+          <div class="card-body">
+              <div class="table-responsive">
+                  <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                      <thead>
+                          <tr>
+                              <th>Nombre Completo</th>
+                              <th>Email</th>
+                              <th>Rol</th>
+                              <th>Días Totales</th>
+                              <th>Días Tomados</th>
+                              <th>Días Pendientes</th>
+                              </tr>
+                      </thead>
+                      <tbody>
+                          {% for user in users %}
+                          <tr>
+                              <td><a href="/admin/users/{{ user.id }}">{{ user.full_name }}</a></td>
+                              <td>{{ user.email }}</td>
+                              <td>{{ user.role }}{% if user.role == 'manager' and user.can_request_own_vacation %} (Auto Solicitud: SI){% endif %}</td>
+                              <td>{{ user.vacation_days_total }}</td>
+                              <td>{{ user.vacation_days_taken }}</td>
+                              <td>{{ user.vacation_days_total - user.vacation_days_taken }}</td>
+                          </tr>
+                          {% endfor %}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </div>
+  </div>
 
   </div>
 {% endblock %}

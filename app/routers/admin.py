@@ -251,11 +251,13 @@ def admin_user_reset_password(request: Request, user_id: int, db: Session = Depe
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Password reseteado.", status_code=303)
 
 # --- ORGANIGRAMA ---
-@router.get("/reports", response_class=HTMLResponse, name="admin_reports_view")
+@router.get("/reports", name="admin_reports_view")
 def admin_reports_view(request: Request):
-    """Renderiza la página HTML de reportes."""
-    tmpl = templates.get_template("admin_reports.html")
-    return tmpl.render({"request": request})
+    """
+    Redirige a la nueva sección de reportes en reports.py
+    para evitar el error de 'alerts undefined'.
+    """
+    return RedirectResponse(url="/gestion/reports/", status_code=303)
 
 @router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
 def admin_org_chart(request: Request, db: Session = Depends(get_db)):

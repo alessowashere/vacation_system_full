@@ -48,7 +48,15 @@ def calculate_end_date_api(
         valid_policy, msg_policy = calculator.validate_policy_dates(target_user, calc_request.start_date)
         if not valid_policy:
             return {"success": False, "error": msg_policy}
-
+            
+        valid_limit, msg_limit = calculator.check_period_type_limit(
+            calc_request.start_date, 
+            calc_request.period_type,
+            ignore_vacation_id=calc_request.vacation_id
+        )
+        if not valid_limit:
+            return {"success": False, "error": msg_limit}
+            
         # 3. Calcular Fin y aplicar reglas de negocio (Viernes, Puentes, Periodos válidos)
         calculation = calculator.calculate_end_date(
             calc_request.start_date, 
