@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import date, datetime
 from typing import Dict, Any, Optional, List
+from app.routers.reports import COP_ORDENADO  # Importamos el orden oficial
 
 from app import crud, models, schemas
 from app.auth import get_current_admin_user
@@ -115,22 +116,48 @@ def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_d
 
 # --- GESTIÓN DE USUARIOS ---
 
+# app/routers/admin.py
+
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
 def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg: Optional[str] = None):
-    users = crud.get_all_users(db)
-    users.sort(key=lambda u: u.area if u.area else "ZZZZ")
+    # Traemos a todos (activos e inactivos) para que puedas gestionarlos
+    all_users = db.query(models.User).all()
     
-    tmpl = templates.get_template("admin_user_list.html")
-    return tmpl.render({"request": request, "users": users, "success_msg": success_msg})
+    users_by_area = {}
+    for u in all_users:
+        a = (u.area or "SIN ÁREA").strip().upper()
+        if a not in users_by_area: users_by_area[a] = []
+        users_by_area[a].append(u)
 
-@router.get("/users/new", response_class=HTMLResponse, name="admin_user_new")
-def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
-    managers = crud.get_all_managers(db)
-    policies = crud.get_all_policies(db)
-    tmpl = templates.get_template("admin_user_form.html")
-    return tmpl.render({
-        "request": request, "user": None, "managers": managers, "policies": policies,
-        "action_url": request.url_for("admin_user_create"), "error_msg": None
+    hierarchical_list = []
+    procesados = set()
+
+    # 1. Áreas que coinciden con el COP
+    for nivel, nombre_cop in COP_ORDENADO:
+        n_up = nombre_cop.upper()
+        miembros = users_by_area.get(n_up, [])
+        if miembros:
+            procesados.add(n_up)
+            hierarchical_list.append({
+                "nivel": nivel, "nombre": nombre_cop, 
+                "miembros": sorted(miembros, key=lambda x: x.full_name)
+            })
+
+    # 2. Áreas por corregir (sobrantes)
+    sobrantes = []
+    for a_db, pers in users_by_area.items():
+        if a_db not in procesados:
+            for p in pers: p.area_erronea = a_db
+            sobrantes.extend(pers)
+    
+    if sobrantes:
+        hierarchical_list.append({
+            "nivel": 1, "nombre": "⚠️ PERSONAL POR CLASIFICAR (Nombres no coinciden con el COP)", 
+            "miembros": sorted(sobrantes, key=lambda x: x.full_name)
+        })
+
+    return templates.TemplateResponse("admin_user_list.html", {
+        "request": request, "hierarchy": hierarchical_list, "success_msg": success_msg
     })
 
 @router.post("/users/new", name="admin_user_create")
