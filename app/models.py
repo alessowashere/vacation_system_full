@@ -22,6 +22,7 @@ class User(Base):
     vacation_policy = relationship("VacationPolicy")
     location = Column(String(50), default="CUSCO")
     can_request_own_vacation = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
 
 class VacationPolicy(Base):
     __tablename__ = "vacation_policies"

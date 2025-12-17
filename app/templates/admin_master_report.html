@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte Maestro Institucional UAC{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-10 flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 no-print">
+        <div>
+            <h1 class="text-2xl font-black text-slate-800">REPORTE MAESTRO DE VACACIONES</h1>
+            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">Orden Jer&aacute;rquico Institucional UAC</p>
+        </div>
+        <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold transition flex items-center shadow-md">
+            <i class="fas fa-print mr-2"></i> Preparar Resoluci&oacute;n
+        </button>
+    </div>
+
+    {% for section in report %}
+    <div class="mb-6 break-inside-avoid">
+        
+        <div class="px-5 py-2 rounded-t-lg border-x border-t
+            {% if section.nivel == 1 %} bg-slate-800 border-slate-800 text-white
+            {% elif section.nivel == 2 %} bg-slate-100 border-slate-300 text-slate-700 ml-4
+            {% else %} bg-white border-slate-200 text-slate-500 ml-8 {% endif %}">
+            <h3 class="{% if section.nivel == 1 %} text-sm font-black {% else %} text-xs font-bold {% endif %} uppercase">
+                {% if section.nivel == 2 %} <i class="fas fa-caret-right mr-1 opacity-50"></i> {% endif %}
+                {% if section.nivel == 3 %} <i class="fas fa-minus mr-1 opacity-30"></i> {% endif %}
+                {{ section.nombre }}
+            </h3>
+        </div>
+
+        <div class="overflow-hidden border border-slate-200 rounded-b-lg shadow-sm
+            {% if section.nivel == 2 %} ml-4 {% elif section.nivel == 3 %} ml-8 {% endif %}">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-black uppercase">
+                    <tr>
+                        <th class="px-5 py-2 w-1/3">Servidor</th>
+                        <th class="px-5 py-2 text-center w-20">Saldo</th>
+                        <th class="px-5 py-2">Programaci&oacute;n Individual</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                    {% if section.miembros %}
+                        {% for item in section.miembros %}
+                        <tr class="{% if item.user.role in ['manager', 'admin'] %} bg-blue-50/30 {% endif %}">
+                            <td class="px-5 py-3">
+                                <div class="font-bold text-slate-900 leading-tight text-xs">{{ item.user.full_name }}</div>
+                                <div class="text-[9px] text-slate-400 mt-0.5">DNI: {{ item.user.username }}</div>
+                            </td>
+                            <td class="px-5 py-3 text-center align-top">
+                                <span class="font-black text-xs {% if item.balance >= 30 %} text-red-600 {% else %} text-slate-600 {% endif %}">
+                                    {{ item.balance }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-3">
+                                {% if item.vacations %}
+                                    <div class="flex flex-col gap-1">
+                                        {% for v in item.vacations %}
+                                        <div class="flex items-center justify-between bg-slate-50 border border-slate-200 px-2 py-1 rounded text-[10px] font-medium">
+                                            <span>{{ v.start_date.strftime('%d/%m/%Y') }} - {{ v.end_date.strftime('%d/%m/%Y') }}</span>
+                                            <span class="text-[8px] text-slate-300 uppercase italic">{{ v.status }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-orange-400 text-[9px] font-black uppercase italic">
+                                        <i class="fas fa-clock mr-1"></i> Sin programaci&oacute;n
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="px-5 py-2 text-center text-[9px] text-slate-300 italic bg-gray-50/30 uppercase tracking-widest">
+                                Unidad sin personal registrado en el sistema
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        body { background: white !important; -webkit-print-color-adjust: exact; }
+        .break-inside-avoid { page-break-inside: avoid; }
+        .container { max-width: 100% !important; padding: 0 !important; }
+        .ml-4, .ml-8 { margin-left: 0 !important; border-left: 3px solid #eee; }
+    }
+</style>
+{% endblock %}

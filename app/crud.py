@@ -500,7 +500,7 @@ def get_all_users(db: Session):
 def get_all_managers(db: Session):
     return db.query(models.User).filter(models.User.role.in_(['manager', 'admin', 'hr'])).order_by(models.User.username).all()
 
-def admin_update_user(db: Session, user: models.User, username: str, full_name: str, email: str, role: str, area: str, vacation_days_total: int, manager_id: int, vacation_policy_id: int = None, location: str = "CUSCO", can_request_own_vacation: bool = False): 
+def admin_update_user(db: Session, user: models.User, username: str, full_name: str, email: str, role: str, area: str, vacation_days_total: int, manager_id: int, vacation_policy_id: int = None, location: str = "CUSCO", can_request_own_vacation: bool = False, is_active: bool = True): 
     user.username = username
     user.full_name = full_name
     user.email = email
@@ -511,6 +511,7 @@ def admin_update_user(db: Session, user: models.User, username: str, full_name: 
     user.vacation_policy_id = vacation_policy_id if vacation_policy_id else None
     user.location = location
     user.can_request_own_vacation = can_request_own_vacation
+    user.is_active = is_active
     db.commit()
     db.refresh(user)
     return user

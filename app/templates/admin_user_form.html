@@ -85,6 +85,14 @@
       <p class="text-xs text-gray-500 mb-4 ml-6">
         Marcar solo para jefes intermedios que deben iniciar sus propios trámites.
       </p>
+      <div class="flex items-center mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <input type="checkbox" name="is_active" id="is_active" 
+               class="h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+               {% if not user or user.is_active %}checked{% endif %}>
+        <label for="is_active" class="ml-3 block text-sm font-bold text-gray-900">
+          Usuario Activo en la Institucion
+        </label>
+      </div>
       <div>
         <label for="location" class="block text-sm font-medium text-gray-700">Sede / Ubicación:</label>
         <select name="location" id="location" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
