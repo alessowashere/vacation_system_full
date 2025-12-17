@@ -6,11 +6,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import date, datetime
 from typing import Dict, Any, Optional, List
-from app.routers.reports import COP_ORDENADO  # Importamos el orden oficial
 
 from app import crud, models, schemas
 from app.auth import get_current_admin_user
 from app.db import SessionLocal
+# Importamos el COP oficial para el listado jerárquico
+from app.routers.reports import COP_ORDENADO 
 
 # Configuración del router
 router = APIRouter(
@@ -116,7 +117,6 @@ def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_d
 
 # --- GESTIÓN DE USUARIOS ---
 
-# app/routers/admin.py
 @router.get("/users/new", response_class=HTMLResponse, name="admin_user_new")
 def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
     managers = crud.get_all_managers(db)
@@ -127,10 +127,8 @@ def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
         "action_url": request.url_for("admin_user_create"), "error_msg": None
     })
     
-    
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
 def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg: Optional[str] = None):
-    # Traemos a todos (activos e inactivos) para que puedas gestionarlos
     all_users = db.query(models.User).all()
     
     users_by_area = {}
@@ -150,10 +148,10 @@ def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg
             procesados.add(n_up)
             hierarchical_list.append({
                 "nivel": nivel, "nombre": nombre_cop, 
-                "miembros": sorted(miembros, key=lambda x: x.full_name or "") # Corregido
+                "miembros": sorted(miembros, key=lambda x: (x.full_name or "").lower())
             })
 
-    # 2. Áreas por corregir (sobrantes)
+    # 2. Áreas por corregir (sobrantes) - CORREGIDO PARA QUE TODOS APAREZCAN
     sobrantes = []
     for a_db, pers in users_by_area.items():
         if a_db not in procesados:
@@ -162,8 +160,8 @@ def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg
     
     if sobrantes:
         hierarchical_list.append({
-            "nivel": nivel, "nombre": nombre_cop, 
-            "miembros": sorted(miembros, key=lambda x: x.full_name or "")
+            "nivel": 99, "nombre": "OTRAS ÁREAS / POR REVISAR", 
+            "miembros": sorted(sobrantes, key=lambda x: (x.full_name or "").lower())
         })
 
     return templates.TemplateResponse("admin_user_list.html", {
@@ -263,7 +261,7 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
         manager_id=manager_id, vacation_policy_id=vacation_policy_id,
         location=location,
         can_request_own_vacation=can_request_own_vacation,
-        is_active=is_active # <-- AHORA SÍ SE ENVÍA
+        is_active=is_active
     )
     
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Actualizado.", status_code=303)
@@ -274,19 +272,17 @@ def admin_user_reset_password(request: Request, user_id: int, db: Session = Depe
     crud.admin_reset_password(db, user)
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Password reseteado.", status_code=303)
 
-# --- CORRECCIÓN DE LA REDIRECCIÓN ---
 @router.get("/reports", name="admin_reports_view")
 def admin_reports_view(request: Request):
     """
-    Redirige usando ruta relativa '../reports/' para preservar el puerto
-    del cliente (ej: 49262) sin que el proxy o FastAPI lo eliminen.
+    Redirige usando url_for para preservar el puerto del cliente (ej: 49262)
+    evitando que redirecciones absolutas lo eliminen.
     """
-    return RedirectResponse(url="../reports/", status_code=303)
+    return RedirectResponse(url=request.url_for('admin_reports_panel'), status_code=303)
 
 @router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
 def admin_org_chart(request: Request, db: Session = Depends(get_db)):
     users = crud.get_all_users(db)
-    
     org_data = []
     for u in users:
         role_style = "color:black;"
@@ -295,25 +291,12 @@ def admin_org_chart(request: Request, db: Session = Depends(get_db)):
         
         node_html = f"""
             <div style="font-family: sans-serif; width: 160px; padding: 5px;">
-                <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">
-                    {u.full_name or u.username}
-                </div>
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">{u.full_name or u.username}</div>
                 <div style="{role_style} font-size: 12px;">{u.role.upper()}</div>
-                <div style="color: gray; font-size: 11px; font-style: italic;">
-                    {u.area or 'Sin Área'}
-                </div>
+                <div style="color: gray; font-size: 11px; font-style: italic;">{u.area or 'Sin Área'}</div>
             </div>
         """
-        
-        node_id = str(u.id)
-        parent_id = str(u.manager_id) if u.manager_id else ""
-        tooltip = f"{u.username} - {u.role}"
-        
-        org_data.append([
-            {"v": node_id, "f": node_html}, 
-            parent_id, 
-            tooltip
-        ])
+        org_data.append([{"v": str(u.id), "f": node_html}, str(u.manager_id) if u.manager_id else "", u.username])
 
     tmpl = templates.get_template("admin_org_chart.html")
     return tmpl.render({"request": request, "org_data": org_data})

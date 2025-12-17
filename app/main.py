@@ -45,6 +45,14 @@ templates = Jinja2Templates(directory="app/templates")
 
 app = FastAPI(root_path="/gestion")
 
+# --- MIDDLEWARE DE LOGGING (Añadido para ver actividad en consola) ---
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"DEBUG: {request.method} {request.url.path} - Host: {request.headers.get('host')}")
+    response = await call_next(request)
+    print(f"DEBUG: Status {response.status_code}")
+    return response
+
 # 2. CONECTAR LIMITER A LA APP
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -456,9 +464,6 @@ def suspend_vacation_form(
     })
 
 # ---- INCLUIR ROUTERS (CORREGIDO) ----
-from app.api import api_router
-
-# Solo incluirlos UNA VEZ
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router.router)
 app.include_router(actions_router.router)

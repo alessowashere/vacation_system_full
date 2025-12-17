@@ -8,7 +8,7 @@
 
     {% for section in hierarchy %}
     <div class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div class="px-4 py-1.5 {% if 'CLASIFICAR' in section.nombre %} bg-red-600 {% else %} bg-gray-800 {% endif %} text-white text-[10px] font-black uppercase tracking-widest">
+        <div class="px-4 py-1.5 {% if section.nivel == 99 %} bg-red-600 {% else %} bg-gray-800 {% endif %} text-white text-[10px] font-black uppercase tracking-widest">
             {{ section.nombre }}
         </div>
         <table class="w-full text-[11px] border-collapse">
@@ -45,7 +45,7 @@
 <div id="editModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
     <div class="bg-white rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
         <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-            <h3 class="font-black text-gray-700 uppercase text-xs tracking-widest">Edici&oacute;n R&aacute;pida de Usuario</h3>
+            <h3 class="font-black text-gray-700 uppercase text-xs tracking-widest">Ficha de Usuario</h3>
             <button onclick="closeModal()" class="text-gray-400 hover:text-red-500 text-xl font-bold">&times;</button>
         </div>
         <div id="modalBody" class="p-6 overflow-y-auto">
@@ -55,35 +55,40 @@
 </div>
 
 <script>
+    function closeModal() {
+        const modal = document.getElementById('editModal');
+        modal.classList.replace('flex', 'hidden');
+        document.getElementById('modalBody').innerHTML = '';
+    }
+
+    // Cerrar si se hace clic fuera del contenido blanco
+    window.onclick = function(event) {
+        const modal = document.getElementById('editModal');
+        if (event.target == modal) {
+            closeModal();
+        }
+    }
+
     async function openEditModal(userId) {
         const modal = document.getElementById('editModal');
         const body = document.getElementById('modalBody');
-        
         modal.classList.replace('hidden', 'flex');
-        body.innerHTML = '<div class="text-center py-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Abriendo ficha institucional...</div>';
+        body.innerHTML = '<div class="text-center py-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Cargando datos...</div>';
         
         try {
             const response = await fetch(`/gestion/admin/users/${userId}/edit`);
             const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            
-            // Extraemos solo el formulario del contenido completo
             const form = doc.querySelector('form');
-            
             if (form) {
-                form.className = "space-y-6 text-slate-700";
                 body.innerHTML = '';
                 body.appendChild(form);
-                
-                // Estilo al botón de Guardar del modal
-                const btn = form.querySelector('button[type="submit"]');
-                if (btn) btn.className = "w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-lg transition-all uppercase text-xs tracking-widest mt-6";
             } else {
-                body.innerHTML = '<p class="text-red-500 text-center font-bold">Error: No se pudo cargar el formulario.</p>';
+                body.innerHTML = '<p class="text-red-500 text-center">No se pudo cargar el formulario.</p>';
             }
         } catch (e) {
-            body.innerHTML = '<p class="text-red-600 text-center font-bold">Error de conexión con el servidor.</p>';
+            body.innerHTML = '<p class="text-red-600 text-center">Error de conexión.</p>';
         }
     }
 </script>

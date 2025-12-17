@@ -15,8 +15,10 @@ from app.db import get_db
 from app.auth import get_current_admin_user
 from app.utils.email import send_email_async
 
+# CORRECCIÓN: El prefix debe ser solo /reports. 
+# Con root_path="/gestion", la ruta final es /gestion/reports/
 router = APIRouter(
-    prefix="/gestion/reports",
+    prefix="/reports",
     tags=["Reports"],
     dependencies=[Depends(get_current_admin_user)]
 )
@@ -26,10 +28,10 @@ templates = Jinja2Templates(directory="app/templates")
 # --- FUNCIONES AUXILIARES ---
 
 def get_base_query(db: Session):
-    # Ahora solo devuelve personal programable que esté ACTIVO
+    """Consulta base para el personal programable activo."""
     return db.query(models.User).filter(
         and_(
-            models.User.is_active == True,  # Solo activos
+            models.User.is_active == True,
             or_(
                 models.User.role == 'employee',
                 and_(
@@ -40,7 +42,7 @@ def get_base_query(db: Session):
         )
     )
 
-# --- VISTA PRINCIPAL (DASHBOARD) ---
+# --- VISTA PRINCIPAL (TABLERO DE CONTROL) ---
 
 @router.get("/", response_class=HTMLResponse, name="admin_reports_panel")
 def reports_panel(
@@ -51,10 +53,9 @@ def reports_panel(
     sort_by: Optional[str] = "balance_desc",
     db: Session = Depends(get_db)
 ):
-    # 1. Obtener Áreas
+    # 1. Obtener Áreas para el filtro
     all_areas = db.query(models.User.area).distinct().filter(models.User.area != None).all()
-    areas_list = [r[0] for r in all_areas]
-    areas_list.sort()
+    areas_list = sorted([r[0] for r in all_areas])
 
     # 2. Query Base
     query = get_base_query(db)
@@ -74,28 +75,27 @@ def reports_panel(
 
     users_orm = query.all()
     
-    # 3. Pre-fetch de datos
+    # 3. LÓGICA DE ALERTAS (Restaurada por completo)
+    # Detectar borradores atascados
     drafts = db.query(models.VacationPeriod).filter(models.VacationPeriod.status == 'draft').all()
     users_with_drafts = {vp.user_id for vp in drafts}
     
+    # Detectar programación futura (aprobada o en RRHH)
     future_requests = db.query(models.VacationPeriod).filter(
         models.VacationPeriod.start_date >= date.today(),
         models.VacationPeriod.status.in_(['approved', 'pending_hr'])
     ).all()
     users_with_future = {vp.user_id for vp in future_requests}
 
-    # 4. Procesamiento
+    # 4. Procesamiento de saldos y verificaciones
     users_view = []
-    
     for u in users_orm:
         balance = crud.get_user_vacation_balance(db, u)
         
-        is_stuck = (u.id in users_with_drafts)
-        has_future_plan = (u.id in users_with_future)
-        
-        # CORRECCIÓN: Si tiene más de 5 días, requiere programación SIEMPRE,
-        # aunque ya tenga algo programado (porque podría ser insuficiente).
-        needs_planning = (balance > 5) 
+        # Estas variables activan los botones de alerta en el template admin_reports.html
+        is_stuck = (u.id in users_with_drafts)         # El jefe no ha enviado a RRHH
+        has_future_plan = (u.id in users_with_future)  # Ya tiene algo programado
+        needs_planning = (balance > 5)                 # Le quedan muchos días por programar
 
         if balance_status:
             keep = False
@@ -123,7 +123,6 @@ def reports_panel(
     elif sort_by == "name":
         users_view.sort(key=lambda x: x["user_obj"].full_name or "")
 
-    # Ya no pasamos "alerts" globales para no ensuciar la interfaz
     return templates.TemplateResponse("admin_reports.html", {
         "request": request,
         "users": users_view,
@@ -149,21 +148,9 @@ async def remind_manager_context(
             send_email_async,
             subject=f"URGENTE: Solicitud Pendiente - {employee.full_name}",
             email_to=[manager.email],
-            body=f"""
-            <div style="font-family: sans-serif; color: #333;">
-                <h3>Solicitud Pendiente de Aprobaci&oacute;n</h3>
-                <p>Hola <strong>{manager.full_name}</strong>,</p>
-                <p>El colaborador <strong>{employee.full_name}</strong> tiene una solicitud de vacaciones en estado <em>'Borrador'</em>.</p>
-                <p>Por favor, ingrese al sistema para revisarla y enviarla a RRHH si procede.</p>
-                <br>
-                <a href="http://dataepis.uandina.pe:49262/gestion/login" style="background-color:#3498db;color:white;padding:10px 15px;text-decoration:none;border-radius:4px;display:inline-block;">Ir al Sistema</a>
-            </div>
-            """
+            body=f"<h3>Solicitud en Borrador</h3><p>Hola {manager.full_name}, el colaborador {employee.full_name} tiene una solicitud que requiere ser enviada a RRHH.</p>"
         )
-    referer = request.headers.get("referer")
-    if referer:
-        return RedirectResponse(url=referer, status_code=303)
-    return RedirectResponse(url="../", status_code=303)
+    return RedirectResponse(url=request.headers.get("referer", "../"), status_code=303)
 
 @router.post("/remind/employee/{user_id}", name="remind_employee_balance")
 async def remind_employee_balance(
@@ -177,152 +164,80 @@ async def remind_employee_balance(
             send_email_async,
             subject="Recordatorio: Programación de Vacaciones",
             email_to=[user.email],
-            body=f"""
-            <div style="font-family: sans-serif; color: #333;">
-                <h3>Recordatorio de Saldos</h3>
-                <p>Hola <strong>{user.full_name}</strong>,</p>
-                <p>Notamos que tienes <strong>{balance} d&iacute;as</strong> de vacaciones pendientes.</p>
-                <p>Te sugerimos coordinar con tu jefe y registrar tus vacaciones.</p>
-                <br>
-                <a href="http://dataepis.uandina.pe:49262/gestion/login" style="background-color:#3498db;color:white;padding:10px 15px;text-decoration:none;border-radius:4px;display:inline-block;">Ingresar al Sistema</a>
-            </div>
-            """
+            body=f"<p>Hola {user.full_name}, tienes {balance} días de vacaciones pendientes por programar.</p>"
         )
-    referer = request.headers.get("referer")
-    if referer:
-        return RedirectResponse(url=referer, status_code=303)
-    return RedirectResponse(url="../", status_code=303)
+    return RedirectResponse(url=request.headers.get("referer", "../"), status_code=303)
 
-# --- DESCARGAS ---
+# --- DESCARGAS (Restauradas para evitar NoMatchFound) ---
 
 @router.get("/download/planned", name="report_planned")
 def download_planned(db: Session = Depends(get_db)):
     today = date.today()
     eligible_users = get_base_query(db).all()
     eligible_ids = [u.id for u in eligible_users]
-
     vacations = db.query(models.VacationPeriod).join(models.User).filter(
         models.VacationPeriod.user_id.in_(eligible_ids),
         models.VacationPeriod.start_date >= today,
         models.VacationPeriod.status.in_(['approved', 'pending_hr', 'pending_modification'])
-    ).order_by(models.User.area.asc(), models.VacationPeriod.start_date.asc()).all()
-    
-    data = []
-    for v in vacations:
-        estado_esp = {
-            "approved": "Aprobado", "pending_hr": "Pendiente RRHH", 
-            "pending_modification": "Solicita Cambio"
-        }.get(v.status, v.status)
-
-        data.append({
-            "Área": v.user.area or "Sin Área",
-            "Empleado": v.user.full_name,
-            "Inicio": v.start_date, "Fin": v.end_date, "Días": v.days,
-            "Estado": estado_esp,
-            "Jefe": v.user.manager.full_name if v.user.manager else "Sin Jefe"
-        })
-    
+    ).all()
+    data = [{"Área": v.user.area, "Empleado": v.user.full_name, "Inicio": v.start_date, "Fin": v.end_date, "Días": v.days, "Estado": v.status} for v in vacations]
     return generate_excel_response(data, "Planificacion_Futura")
 
 @router.get("/download/history", name="report_history")
 def download_history(db: Session = Depends(get_db)):
-    eligible_users = get_base_query(db).all()
-    eligible_ids = [u.id for u in eligible_users]
-
-    vacations = db.query(models.VacationPeriod).join(models.User).filter(
-        models.VacationPeriod.user_id.in_(eligible_ids)
-    ).order_by(models.VacationPeriod.created_at.desc()).all()
-    
-    data = []
-    for v in vacations:
-        data.append({
-            "ID": v.id, "Empleado": v.user.full_name, "Área": v.user.area,
-            "Inicio": v.start_date, "Fin": v.end_date, "Días": v.days,
-            "Estado": v.status, "Solicitado": v.created_at.strftime("%Y-%m-%d")
-        })
+    vacations = db.query(models.VacationPeriod).all()
+    data = [{"ID": v.id, "Empleado": v.user.full_name, "Área": v.user.area, "Inicio": v.start_date, "Fin": v.end_date, "Días": v.days, "Estado": v.status} for v in vacations]
     return generate_excel_response(data, "Historial_Global")
 
 @router.get("/download/balances", name="report_balances")
 def download_balances(db: Session = Depends(get_db)):
-    users = get_base_query(db).order_by(models.User.area).all()
-    data = []
-    for u in users:
-        balance = crud.get_user_vacation_balance(db, u)
-        data.append({
-            "DNI": u.username, "Nombre": u.full_name, "Área": u.area,
-            "Rol": u.role, "Total Anual": u.vacation_days_total, "Saldo": balance
-        })
+    users = get_base_query(db).all()
+    data = [{"DNI": u.username, "Nombre": u.full_name, "Área": u.area, "Saldo": crud.get_user_vacation_balance(db, u)} for u in users]
     return generate_excel_response(data, "Reporte_Saldos")
 
 def generate_excel_response(data: list, file_prefix: str):
-    if not data: 
-        df = pd.DataFrame([{"Mensaje": "No hay datos"}])
-    else: 
-        df = pd.DataFrame(data)
-        
+    df = pd.DataFrame(data) if data else pd.DataFrame([{"Mensaje": "Sin datos"}])
     stream = io.BytesIO()
     with pd.ExcelWriter(stream, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name="Datos")
-        worksheet = writer.sheets["Datos"]
-        for idx, col in enumerate(df.columns):
-            worksheet.column_dimensions[chr(65 + idx)].width = 22
-            
     stream.seek(0)
     filename = f"{file_prefix}_{datetime.now().strftime('%Y%m%d')}.xlsx"
-    return StreamingResponse(
-        stream, 
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-# app/routers/reports.py (Añadir al final)
+    return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
-# Definición del Cuadro Orgánico según el orden institucional
-# app/routers/reports.py
+# --- REPORTE MAESTRO (Respetando el COP Oficial) ---
 
-# Estructura de "Grandes Grupos" y sus dependencias (Jerarquía A -> B -> C)
-# app/routers/reports.py
-
-# Lista plana del COP respetando niveles (Nivel, Nombre)
-# 1 = A (Oficina Principal), 2 = B (Dirección/Oficina), 3 = C (Unidad/Coordinación)
 COP_ORDENADO = [
     (1, "OFICINA DE AUDITORÍA"), (1, "DEFENSORÍA UNIVERSITARIA"), (1, "OFICINA DE AUDITORÍA ACADÉMICA"),
     (1, "RECTORADO"), (2, "OFICINA DE SECRETARÍA GENERAL"), (2, "DIRECCIÓN DE PLANIFICACIÓN Y DESARROLLO UNIVERSITARIO"),(3, "UNIDAD DE TRANSFORMACION DIGITAL"),
-    (3, "UNIDAD DE PLANEAMIENTO Y PRESUPUESTO"),
-    (3, "UNIDAD DE ORGANIZACION Y METODOS DE TRABAJO"),
-    (3, "UNIDAD DE ESTADISTICA"),
-    (2, "OFICINA DE ASESORÍA JURÍDICA"), (2, "DIRECCIÓN DE TECNOLOGÍAS DE INFORMACIÓN"),
-    (3, "UNIDAD DE DESARROLLO DE PROYECTOS INFORMÁTICOS"), (3, "UNIDAD DE DISEÑO Y PROGRAMACIÓN"),
-    (3, "UNIDAD DE PRODUCCIÓN Y SOPORTE INFORMÁTICO"), (2, "OFICINA DE MARKETING, PROMOCIÓN E IMAGEN INSTITUCIONAL"),
-    (3, "UNIDAD DE MARKETING DIGITAL"), (3, "UNIDAD DE IMAGEN INSTITUCIONAL"),
-    (1, "VICERRECTORADO ADMINISTRATIVO"), (2, "CENTROS DE PRODUCCIÓN DE BIENES Y SERVICIOS"),
-    (3, "CENTRO DE IDIOMAS"), (3, "CENTRO DE FORMACIÓN EN TECNOLOGÍAS DE INFORMACIÓN"),
-    (2, "DIRECCIÓN DE ADMINISTRACIÓN"), (3, "UNIDAD DE CONTABILIDAD"), (3, "UNIDAD DE TESORERÍA"),
-    (3, "UNIDAD DE PATRIMONIO"), (3, "UNIDAD DE ABASTECIMIENTOS"), (3, "UNIDAD DE SERVICIOS GENERALES"),
-    (2, "DIRECCIÓN DE RECURSOS HUMANOS"), (3, "UNIDAD DE CONTROL, DESARROLLO HUMANO Y ESCALAFÓN"),
-    (3, "UNIDAD DE REMUNERACIONES"), (3, "UNIDAD DE SEGURIDAD Y SALUD EN EL TRABAJO"),
+    (3, "UNIDAD DE PLANEAMIENTO Y PRESUPUESTO"), (3, "UNIDAD DE ORGANIZACION Y METODOS DE TRABAJO"), (3, "UNIDAD DE ESTADISTICA"),
+    (2, "OFICINA DE ASESORÍA JURÍDICA"), (2, "DIRECCIÓN DE TECNOLOGÍAS DE INFORMACIÓN"), (3, "UNIDAD DE DESARROLLO DE PROYECTOS INFORMÁTICOS"),
+    (3, "UNIDAD DE DISEÑO Y PROGRAMACIÓN"), (3, "UNIDAD DE PRODUCCIÓN Y SOPORTE INFORMÁTICO"), (2, "OFICINA DE MARKETING, PROMOCIÓN E IMAGEN INSTITUCIONAL"),
+    (3, "UNIDAD DE MARKETING DIGITAL"), (3, "UNIDAD DE IMAGEN INSTITUCIONAL"), (1, "VICERRECTORADO ADMINISTRATIVO"),
+    (2, "CENTROS DE PRODUCCIÓN DE BIENES Y SERVICIOS"), (3, "CENTRO DE IDIOMAS"), (3, "CENTRO DE FORMACIÓN EN TECNOLOGÍAS DE INFORMACIÓN"),
+    (2, "DIRECCIÓN DE ADMINISTRACIÓN"), (3, "UNIDAD DE CONTABILIDAD"), (3, "UNIDAD DE TESORERÍA"), (3, "UNIDAD DE PATRIMONIO"),
+    (3, "UNIDAD DE ABASTECIMIENTOS"), (3, "UNIDAD DE SERVICIOS GENERALES"), (2, "DIRECCIÓN DE RECURSOS HUMANOS"),
+    (3, "UNIDAD DE CONTROL, DESARROLLO HUMANO Y ESCALAFÓN"), (3, "UNIDAD DE REMUNERACIONES"), (3, "UNIDAD DE SEGURIDAD Y SALUD EN EL TRABAJO"),
     (2, "DIRECCIÓN DE BIENESTAR UNIVERSITARIO"), (3, "UNIDAD DE SALUD"), (3, "UNIDAD DE SERVICIO SOCIAL"),
     (2, "OFICINA DE INFRAESTRUCTURA Y OBRAS"), (3, "UNIDAD DE PROYECTOS Y OBRAS"), (3, "UNIDAD DE MANTENIMIENTO"),
-    (2, "DIRECCIÓN DE PROMOCIÓN DEL DEPORTE"), (3, "UNIDAD DE DEPORTE EN GENERAL Y RECREACIÓN"),
-    (3, "UNIDAD DE DEPORTE DE ALTA COMPETENCIA"),
+    (2, "DIRECCIÓN DE PROMOCIÓN DEL DEPORTE"), (3, "UNIDAD DE DEPORTE EN GENERAL Y RECREACIÓN"), (3, "UNIDAD DE DEPORTE DE ALTA COMPETENCIA"),
     (1, "VICERRECTORADO DE INVESTIGACIÓN"), (2, "OFICINA DE ASESORÍA EN GESTIÓN DE LA INVESTIGACIÓN"),
     (2, "COORDINACIÓN DE TRANSFERENCIA TECNOLÓGICA Y PATENTES"), (2, "INSTITUTO CIENTÍFICO DE INVESTIGACIÓN"),
     (3, "COORDINACIÓN CIENTÍFICA"), (3, "COORDINACIÓN DE INVESTIGACIÓN EN RESPONSABILIDAD SOCIAL UNIVERSITARIA"),
     (3, "CENTRO DE INVESTIGACIÓN ALTAMENTE ESPECIALIZADO DE BIOMÉDICAS"), (3, "BIOTERIO AUTOMATIZADO."),
-    (2, "DIRECCIÓN DE GESTIÓN DE LA INVESTIGACIÓN Y DE LA PRODUCCIÓN INTELECTUAL"),
-    (3, "COORDINACIÓN DE FOMENTO DE LA INVESTIGACIÓN"), (3, "COORDINACIÓN DE ADMINISTRACIÓN DE PROYECTOS DE INVESTIGACIÓN."),
-    (3, "COORDINACIÓN EN PRODUCCIÓN INTELECTUAL."), (2, "DIRECCIÓN DE BIBLIOTECAS Y EDITORIAL UNIVERSITARIA"),
-    (3, "COORDINACIÓN DE BIBLIOTECA"), (3, "BIBLIOTECA - FACULTAD DE DERECHO Y CIENCIA POLÍTICA"),
-    (3, "BIBLIOTECA - FACULTAD DE INGENIERÍA"), (3, "BIBLIOTECA - FACULTAD DE CIENCIAS ECONÓMICAS, ADMINISTRATIVAS Y CONTABLES."),
+    (2, "DIRECCIÓN DE GESTIÓN DE LA INVESTIGACIÓN Y DE LA PRODUCCIÓN INTELECTUAL"), (3, "COORDINACIÓN DE FOMENTO DE LA INVESTIGACIÓN"),
+    (3, "COORDINACIÓN DE ADMINISTRACIÓN DE PROYECTOS DE INVESTIGACIÓN."), (3, "COORDINACIÓN EN PRODUCCIÓN INTELECTUAL."),
+    (2, "DIRECCIÓN DE BIBLIOTECAS Y EDITORIAL UNIVERSITARIA"), (3, "COORDINACIÓN DE BIBLIOTECA"),
+    (3, "BIBLIOTECA - FACULTAD DE DERECHO Y CIENCIA POLÍTICA"), (3, "BIBLIOTECA - FACULTAD DE INGENIERÍA"),
+    (3, "BIBLIOTECA - FACULTAD DE CIENCIAS ECONÓMICAS, ADMINISTRATIVAS Y CONTABLES."),
     (3, "BIBLIOTECA - FACULTAD DE CIENCIAS SOCIALES Y EDUCACIÓN"), (3, "BIBLIOTECA - FACULTAD DE CIENCIAS DE LA SALUD"),
     (3, "BIBLIOTECA – ESCUELA DE POSGRADO"), (3, "COORDINACIÓN DE EDITORIAL UNIVERSITARIA."),
     (2, "DIRECCIÓN DE INNOVACIÓN Y EMPRENDIMIENTO."), (3, "COORDINACIÓN EN INNOVACIÓN Y EMPRENDIMIENTO."),
-    (3, "COORDINACIÓN EN INCUBADORAS Y DESARROLLO DE CAPACIDADES EMPRESARIALES"),
-    (1, "VICERRECTORADO ACADÉMICO"), (2, "COORDINACIÓN DE GESTIÓN CON LA SUNEDU"), (2, "DIRECCIÓN DE SERVICIOS ACADÉMICOS"),
-    (3, "UNIDAD DE PROCESOS TÉCNICOS ACADÉMICOS"), (3, "UNIDAD DE REGISTRO CENTRAL Y ESTADÍSTICA ACADÉMICA"),
-    (2, "DIRECCIÓN DE ADMISIÓN Y CENTRO PREUNIVERSITARIO"), (3, "UNIDAD DE ADMISIÓN Y PROCESOS TÉCNICOS"),
-    (3, "COORDINACIÓN DEL CENTRO PREUNIVERSITARIO DE CONSOLIDACIÓN DEL PERFIL DEL INGRESANTE"),
+    (3, "COORDINACIÓN EN INCUBADORAS Y DESARROLLO DE CAPACIDADES EMPRESARIALES"), (1, "VICERRECTORADO ACADÉMICO"),
+    (2, "COORDINACIÓN DE GESTIÓN CON LA SUNEDU"), (2, "DIRECCIÓN DE SERVICIOS ACADÉMICOS"), (3, "UNIDAD DE PROCESOS TÉCNICOS ACADÉMICOS"),
+    (3, "UNIDAD DE REGISTRO CENTRAL Y ESTADÍSTICA ACADÉMICA"), (2, "DIRECCIÓN DE ADMISIÓN Y CENTRO PREUNIVERSITARIO"),
+    (3, "UNIDAD DE ADMISIÓN Y PROCESOS TÉCNICOS"), (3, "COORDINACIÓN DEL CENTRO PREUNIVERSITARIO DE CONSOLIDACIÓN DEL PERFIL DEL INGRESANTE"),
     (2, "DIRECCIÓN DE DESARROLLO ACADÉMICO"), (3, "COORDINACIÓN DE DESARROLLO CURRICULAR Y FORMACIÓN CONTINUA"),
-    (3, "COORDINACIÓN DE TUTORÍA ACADÉMICA Y ATENCIÓN PSICOPEDAGÓGICA"), (3, "UNIDAD DE EDUCACIÓN VIRTUAL Y A DISTANCIA"),
+    (3, "COORDINACIÓN de TUTORÍA ACADÉMICA Y ATENCIÓN PSICOPEDAGÓGICA"), (3, "UNIDAD DE EDUCACIÓN VIRTUAL Y A DISTANCIA"),
     (2, "DIRECCIÓN DE CALIDAD ACADÉMICA Y ACREDITACIÓN UNIVERSITARIA"), (3, "COORDINACIÓN DE CALIDAD ACADÉMICA DE PRE Y POSGRADO"),
     (3, "COORDINACIÓN DE ACREDITACIÓN DE PRE Y POSGRADO"), (2, "DIRECCIÓN DE RESPONSABILIDAD SOCIAL Y EXTENSIÓN UNIVERSITARIA"),
     (3, "UNIDAD DE ATENCIÓN AL DESARROLLO FORMATIVO: ARTE Y CULTURA"), (3, "UNIDAD DE COOPERACIÓN PARA EL DESARROLLO SOSTENIBLE"),
@@ -352,39 +267,22 @@ COP_ORDENADO = [
 
 @router.get("/master", response_class=HTMLResponse, name="admin_master_report")
 def master_report(request: Request, db: Session = Depends(get_db)):
-    # 1. Obtener a TODO el personal sin filtros de roles restrictivos
     all_users = get_base_query(db).all()
-    
-    # 2. Agrupar por área exacta
     users_by_area = {}
     for u in all_users:
         area_key = (u.area or "SIN ÁREA").strip().upper()
-        if area_key not in users_by_area:
-            users_by_area[area_key] = []
-        
+        if area_key not in users_by_area: users_by_area[area_key] = []
         balance = crud.get_user_vacation_balance(db, u)
-        vacations = db.query(models.VacationPeriod).filter(
-            models.VacationPeriod.user_id == u.id
-        ).order_by(models.VacationPeriod.start_date.asc()).all()
-        
-        users_by_area[area_key].append({
-            "user": u, "balance": balance, "vacations": vacations
-        })
+        vacations = db.query(models.VacationPeriod).filter(models.VacationPeriod.user_id == u.id).order_by(models.VacationPeriod.start_date.asc()).all()
+        users_by_area[area_key].append({"user": u, "balance": balance, "vacations": vacations})
 
-    # 3. Generar el reporte respetando cada fila del COP como una sección
+    # CORRECCIÓN: Itera sobre el COP oficial. Si no hay personal, igual añade la sección (miembros vacíos).
     reporte_final = []
     for nivel, nombre_cop in COP_ORDENADO:
-        # Buscamos personal que pertenezca exactamente a esta unidad
         miembros = users_by_area.get(nombre_cop.upper(), [])
-        
-        # Siempre incluimos la sección aunque esté vacía, para que el orden se mantenga
         reporte_final.append({
             "nivel": nivel,
             "nombre": nombre_cop,
-            "miembros": miembros
+            "miembros": miembros # Si está vacío, el template mostrará "Sin personal"
         })
-
-    return templates.TemplateResponse("admin_master_report.html", {
-        "request": request,
-        "report": reporte_final
-    })
+    return templates.TemplateResponse("admin_master_report.html", {"request": request, "report": reporte_final})
