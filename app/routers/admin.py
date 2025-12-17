@@ -14,7 +14,7 @@ from app.db import SessionLocal
 
 # Configuración del router
 router = APIRouter(
-    prefix="/gestion/admin", 
+    prefix="/admin", 
     tags=["Admin"],
     dependencies=[Depends(get_current_admin_user)]
 )
@@ -117,7 +117,17 @@ def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_d
 # --- GESTIÓN DE USUARIOS ---
 
 # app/routers/admin.py
-
+@router.get("/users/new", response_class=HTMLResponse, name="admin_user_new")
+def admin_user_new_form(request: Request, db: Session = Depends(get_db)):
+    managers = crud.get_all_managers(db)
+    policies = crud.get_all_policies(db)
+    tmpl = templates.get_template("admin_user_form.html")
+    return tmpl.render({
+        "request": request, "user": None, "managers": managers, "policies": policies,
+        "action_url": request.url_for("admin_user_create"), "error_msg": None
+    })
+    
+    
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
 def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg: Optional[str] = None):
     # Traemos a todos (activos e inactivos) para que puedas gestionarlos
@@ -140,7 +150,7 @@ def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg
             procesados.add(n_up)
             hierarchical_list.append({
                 "nivel": nivel, "nombre": nombre_cop, 
-                "miembros": sorted(miembros, key=lambda x: x.full_name)
+                "miembros": sorted(miembros, key=lambda x: x.full_name or "") # Corregido
             })
 
     # 2. Áreas por corregir (sobrantes)
@@ -152,8 +162,8 @@ def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg
     
     if sobrantes:
         hierarchical_list.append({
-            "nivel": 1, "nombre": "⚠️ PERSONAL POR CLASIFICAR (Nombres no coinciden con el COP)", 
-            "miembros": sorted(sobrantes, key=lambda x: x.full_name)
+            "nivel": nivel, "nombre": nombre_cop, 
+            "miembros": sorted(miembros, key=lambda x: x.full_name or "")
         })
 
     return templates.TemplateResponse("admin_user_list.html", {
@@ -225,6 +235,7 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
     if not user: raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     form = await request.form()
+    is_active = True if form.get("is_active") else False
     location = form.get("location", "CUSCO")
     can_request_own_vacation = True if form.get("can_request_own_vacation") else False
     username = form.get("username")
@@ -251,7 +262,8 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
         role=role, area=area, vacation_days_total=vacation_days_total,
         manager_id=manager_id, vacation_policy_id=vacation_policy_id,
         location=location,
-        can_request_own_vacation=can_request_own_vacation
+        can_request_own_vacation=can_request_own_vacation,
+        is_active=is_active # <-- AHORA SÍ SE ENVÍA
     )
     
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Actualizado.", status_code=303)
