@@ -36,12 +36,9 @@ def admin_dashboard(request: Request):
 # --- RUTAS DE FERIADOS ---
 @router.get("/feriados", response_class=HTMLResponse, name="admin_feriados")
 def admin_feriados(request: Request, db: Session = Depends(get_db)):
-    # CAMBIO: Fijamos el año a 2026 por defecto, o usamos el actual + 1
     current_year = datetime.now().year
     target_year = 2026 if current_year < 2026 else current_year
     
-    # Modificamos la consulta para traer TODOS los locations para que el admin los vea
-    # (Nota: crud.get_holidays_by_year filtra por location, aquí queremos ver todos para gestionar)
     holidays = db.query(models.Holiday).filter(
         models.Holiday.holiday_date >= date(target_year, 1, 1),
         models.Holiday.holiday_date <= date(target_year, 12, 31)
@@ -55,7 +52,7 @@ def admin_create_holiday(
     request: Request, 
     holiday_date_str: str = Form(...), 
     name: str = Form(...), 
-    location: str = Form(...), # <-- NUEVO CAMPO
+    location: str = Form(...), 
     db: Session = Depends(get_db)
 ):
     try:
@@ -63,10 +60,6 @@ def admin_create_holiday(
     except ValueError:
         return RedirectResponse(url=request.url_for("admin_feriados"), status_code=303)
 
-    # Crear feriado con ubicación
-    # Nota: Quitamos la validación estricta de duplicados por fecha global, 
-    # ahora debería ser fecha + location (o permitimos duplicados si es diferente sede)
-    
     new_holiday = models.Holiday(
         holiday_date=holiday_date, 
         name=name, 
@@ -89,8 +82,6 @@ def admin_delete_holiday(request: Request, holiday_id: int, db: Session = Depend
 def admin_ajustes_page(request: Request, db: Session = Depends(get_db)):
     settings_db = crud.get_all_settings(db)
     settings_dict = {s.key: s.value for s in settings_db}
-    
-    # Obtener políticas para mostrarlas
     policies = crud.get_all_policies(db)
     
     tmpl = templates.get_template("admin_ajustes.html")
@@ -127,7 +118,6 @@ def admin_delete_policy(request: Request, p_id: int, db: Session = Depends(get_d
 @router.get("/users", response_class=HTMLResponse, name="admin_user_list")
 def admin_user_list(request: Request, db: Session = Depends(get_db), success_msg: Optional[str] = None):
     users = crud.get_all_users(db)
-    # Ordenar por área para que el template agrupe bien
     users.sort(key=lambda u: u.area if u.area else "ZZZZ")
     
     tmpl = templates.get_template("admin_user_list.html")
@@ -149,7 +139,6 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
     can_request_own_vacation = True if form.get("can_request_own_vacation") else False
     location = form.get("location", "CUSCO")
     username = form.get("username")
-    # password = form.get("password") <--- ELIMINAR
     full_name = form.get("full_name")
     email = form.get("email")
     role = form.get("role")
@@ -172,10 +161,9 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
         user = crud.create_user(
             username=username, full_name=full_name, email=email,
             role=role, area=area, vacation_days_total=vacation_days_total, manager_id=manager_id,
-            location=location,# <-- PASARLO AL CRUD
-            can_request_own_vacation=can_request_own_vacation # <--- PASAR AL CRUD
+            location=location,
+            can_request_own_vacation=can_request_own_vacation
         )
-        # Actualizar política manualmente si create_user no lo soporta aún
         if vacation_policy_id:
             user.vacation_policy_id = vacation_policy_id
             db.commit()
@@ -189,7 +177,6 @@ async def admin_user_create(request: Request, db: Session = Depends(get_db)):
             "action_url": request.url_for("admin_user_create"), "error_msg": str(e)
         }, status_code=400)
 
-    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + f"?success_msg=Usuario creado.", status_code=303)
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse, name="admin_user_edit")
@@ -211,7 +198,7 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
     if not user: raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     form = await request.form()
-    location = form.get("location", "CUSCO") # <-- LEER DEL FORMULARIO
+    location = form.get("location", "CUSCO")
     can_request_own_vacation = True if form.get("can_request_own_vacation") else False
     username = form.get("username")
     full_name = form.get("full_name")
@@ -236,40 +223,37 @@ async def admin_user_update(request: Request, user_id: int, db: Session = Depend
         db=db, user=user, username=username, full_name=full_name, email=email,
         role=role, area=area, vacation_days_total=vacation_days_total,
         manager_id=manager_id, vacation_policy_id=vacation_policy_id,
-        location=location, # <-- PASARLO AL CRUD
-        can_request_own_vacation=can_request_own_vacation # <--- PASAR AL CRUD
+        location=location,
+        can_request_own_vacation=can_request_own_vacation
     )
     
-    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Actualizado.", status_code=303)
 
 @router.post("/users/{user_id}/reset-password", name="admin_user_reset_password")
 def admin_user_reset_password(request: Request, user_id: int, db: Session = Depends(get_db)):
     user = crud.get_user_by_id(db, user_id)
     crud.admin_reset_password(db, user)
-    # CORRECCIÓN AQUÍ: str() alrededor de request.url_for
     return RedirectResponse(url=str(request.url_for('admin_user_list')) + "?success_msg=Password reseteado.", status_code=303)
 
-# --- ORGANIGRAMA ---
+# --- CORRECCIÓN DE LA REDIRECCIÓN ---
 @router.get("/reports", name="admin_reports_view")
 def admin_reports_view(request: Request):
-    # La barra al principio (/) indica la raíz del dominio/puerto actual.
-    # El status_code 303 (See Other) es el correcto para redirecciones tras POST o cambios de flujo.
-    return RedirectResponse(url="/gestion/reports/", status_code=303)
+    """
+    Redirige usando ruta relativa '../reports/' para preservar el puerto
+    del cliente (ej: 49262) sin que el proxy o FastAPI lo eliminen.
+    """
+    return RedirectResponse(url="../reports/", status_code=303)
 
 @router.get("/organigrama", response_class=HTMLResponse, name="admin_org_chart")
 def admin_org_chart(request: Request, db: Session = Depends(get_db)):
-    """Genera los datos para Google Charts OrgChart"""
     users = crud.get_all_users(db)
     
     org_data = []
     for u in users:
-        # Colores por rol para diferenciar visualmente
         role_style = "color:black;"
         if u.role == "manager": role_style = "color:blue; font-weight:bold;"
         if u.role == "admin": role_style = "color:red; font-weight:bold;"
         
-        # Nodo HTML enriquecido
         node_html = f"""
             <div style="font-family: sans-serif; width: 160px; padding: 5px;">
                 <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px;">
@@ -283,7 +267,6 @@ def admin_org_chart(request: Request, db: Session = Depends(get_db)):
         """
         
         node_id = str(u.id)
-        # Google Charts usa string vacío para nodos raíz (sin jefe)
         parent_id = str(u.manager_id) if u.manager_id else ""
         tooltip = f"{u.username} - {u.role}"
         

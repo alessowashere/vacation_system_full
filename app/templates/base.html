@@ -1,21 +1,48 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
   <title>{% block title %}Sistema de Vacaciones{% endblock %}</title>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100 text-gray-800 min-h-screen font-sans">
 
-  <div class="container mx-auto mt-10 p-4">
-    <main class="bg-white shadow-md rounded-lg p-6">
-      
+  <nav class="bg-white shadow-sm border-b border-gray-200 mb-6">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="font-bold text-xl text-blue-900 flex items-center">
+        <i class="fas fa-plane-departure mr-2 text-blue-600"></i>
+        Sistema de Vacaciones
+      </div>
+      <div class="text-sm text-gray-500">
+        {% if user %}
+          Hola, {{ user.full_name or user.username }} | <a href="/gestion/logout" class="text-red-600 hover:underline">Salir</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mx-auto px-4 pb-12">
+    <main>
+      {% if request.query_params.get('success_msg') %}
+      <div class="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm" role="alert">
+          <p class="font-bold">&Eacute;xito</p>
+          <p>{{ request.query_params.get('success_msg') }}</p>
+      </div>
+      {% endif %}
+
       {% block content %}
       {% endblock %}
-
     </main>
   </div>
+
+  <footer class="mt-10 text-center text-gray-400 text-xs py-4">
+    &copy; 2026 Gesti&oacute;n de Talento Humano
+  </footer>
 
 </body>
 </html>
